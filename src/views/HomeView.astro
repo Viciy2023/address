@@ -1,0 +1,218 @@
+---
+/**
+ * Home page body. Receives all copy as props so the route file stays the only
+ * place that knows about languages and routes.
+ */
+import Generator from "../components/Generator.svelte";
+import type { SiteLang } from "../config";
+import { t } from "../i18n/strings";
+import { COUNTRY_BY_CODE } from "../lib/registry";
+import { localize } from "../config";
+
+interface Props {
+  lang: SiteLang;
+  codes: string[];
+  groupLabels: string[];
+  faqItems: [string, string][];
+  sectionTitles: { fields: string; faq: string };
+}
+const { lang, codes, groupLabels, faqItems, sectionTitles } = Astro.props as Props;
+const s = t(lang);
+---
+
+<section class="hero">
+  <div class="shell">
+    <h1>{s.heroTitle}</h1>
+    <p class="hero-sub">{s.heroSub}</p>
+    <ul class="badges">
+      <li class="pill">{s.badgeNoSignup}</li>
+      <li class="pill">{s.badgeCountries}</li>
+      <li class="pill">{s.badgeOffline}</li>
+    </ul>
+  </div>
+</section>
+
+<section class="shell workspace" aria-label={s.resultTitle}>
+  <Generator client:load {lang} {s} available={codes} />
+</section>
+
+<section class="shell section">
+  <h2 class="section-title">{s.disclaimerTitle}</h2>
+  <p class="section-body">{s.disclaimerBody}</p>
+</section>
+
+<section class="shell section">
+  <h2 class="section-title">{s.countriesTitle}</h2>
+  <p class="section-body">{s.countriesSub}</p>
+  <ul class="country-grid">
+    {codes.map((code) => (
+      <li>
+        <a href={localize("/countries/", lang) + "#" + code.toLowerCase()}>
+          <span class="country-name">{COUNTRY_BY_CODE[code].name[lang]}</span>
+          <span class="country-code mono">{code}</span>
+        </a>
+      </li>
+    ))}
+  </ul>
+</section>
+
+<section class="shell section">
+  <h2 class="section-title">{sectionTitles.fields}</h2>
+  <ul class="group-list">
+    {groupLabels.map((g) => <li>{g}</li>)}
+  </ul>
+</section>
+
+<section class="shell section">
+  <h2 class="section-title">{sectionTitles.faq}</h2>
+  <div class="faq">
+    {faqItems.map(([q, a]) => (
+      <details>
+        <summary>{q}</summary>
+        <p>{a}</p>
+      </details>
+    ))}
+  </div>
+</section>
+
+<style>
+  .hero {
+    padding-block: 3.5rem 2.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .hero h1 {
+    font-size: clamp(2rem, 6vw, 3.25rem);
+    letter-spacing: -0.035em;
+    margin: 0 0 1rem;
+    max-width: 22ch;
+  }
+
+  .hero-sub {
+    font-size: 1.0625rem;
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 0 1.5rem;
+    line-height: 1.7;
+  }
+
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .workspace {
+    padding-block: 2.5rem;
+  }
+
+  .section {
+    padding-block: 2.5rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .section-title {
+    font-size: 1.125rem;
+    margin: 0 0 0.75rem;
+  }
+
+  .section-body {
+    color: var(--text-muted);
+    font-size: 0.9375rem;
+    max-width: 68ch;
+    margin: 0 0 1.5rem;
+    line-height: 1.7;
+  }
+
+  .country-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--border);
+    border-left: 1px solid var(--border);
+  }
+
+  .country-grid a {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    text-decoration: none;
+    color: inherit;
+    transition: background-color 160ms ease;
+    min-height: 44px;
+  }
+
+  .country-grid a:hover {
+    background: var(--surface-2);
+  }
+
+  .country-name { font-size: 0.875rem; }
+  .country-code { font-size: 0.6875rem; color: var(--text-faint); }
+
+  .group-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 2rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+  }
+
+  .faq {
+    border-top: 1px solid var(--border);
+  }
+
+  .faq details {
+    border-bottom: 1px solid var(--border);
+  }
+
+  .faq summary {
+    padding: 1rem 0;
+    cursor: pointer;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-height: 44px;
+  }
+
+  .faq summary::-webkit-details-marker { display: none; }
+
+  .faq summary::after {
+    content: "";
+    width: 9px;
+    height: 9px;
+    border-right: 1.5px solid var(--text-faint);
+    border-bottom: 1.5px solid var(--text-faint);
+    transform: rotate(45deg);
+    transition: transform 180ms ease;
+    flex-shrink: 0;
+  }
+
+  .faq details[open] summary::after {
+    transform: rotate(-135deg);
+  }
+
+  .faq p {
+    margin: 0 0 1.25rem;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    max-width: 72ch;
+    line-height: 1.75;
+  }
+</style>

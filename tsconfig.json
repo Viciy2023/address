@@ -1,0 +1,12 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  "compilerOptions": {
+    "strictNullChecks": true,
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "verbatimModuleSyntax": true,
+    "paths": { "@lib/*": ["./src/lib/*"], "@data/*": ["./src/data/*"] }
+  },
+  "include": [".astro/types.d.ts", "src/**/*", "scripts/**/*"],
+  "exclude": ["dist", "node_modules", ".cache"]
+}

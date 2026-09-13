@@ -1,0 +1,17 @@
+# Normalise line endings so Windows contributors do not pollute diffs.
+* text=auto eol=lf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+
+# Generated data: treat as source so diffs stay readable, but do not run
+# text conversion on it beyond newline normalisation.
+src/data/**/*.json text eol=lf
+src/data/**/*.md text eol=lf
+
+# Lockfile is generated; keep it exact.
+package-lock.json -diff linguist-generated

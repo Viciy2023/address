@@ -1,0 +1,118 @@
+---
+/**
+ * Generic prose page: about, contact, privacy, terms.
+ * Renders a `PageCopy` object; no page-specific markup.
+ */
+import type { PageCopy } from "../content";
+
+interface Props {
+  copy: PageCopy;
+  /** Emit "- " lines as a real list rather than paragraphs. */
+  email?: string;
+}
+
+const { copy, email } = Astro.props as Props;
+
+/** Splits body lines into paragraphs and list items. */
+function render(body: string[]) {
+  const blocks: { type: "p" | "ul"; items: string[] }[] = [];
+  for (const line of body) {
+    if (line.startsWith("- ")) {
+      const last = blocks[blocks.length - 1];
+      if (last && last.type === "ul") last.items.push(line.slice(2));
+      else blocks.push({ type: "ul", items: [line.slice(2)] });
+    } else {
+      blocks.push({ type: "p", items: [line] });
+    }
+  }
+  return blocks;
+}
+
+const emailRe = email ? new RegExp(`(${email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "g") : null;
+---
+
+<article class="prose-page shell">
+  <header class="page-head">
+    <h1>{copy.title}</h1>
+    <p class="page-intro">{copy.intro}</p>
+  </header>
+
+  {copy.sections.map((section) => (
+    <section class="block">
+      <h2>{section.heading}</h2>
+      {render(section.body).map((b) =>
+        b.type === "ul" ? (
+          <ul>{b.items.map((it) => <li set:html={emailRe ? it.replace(emailRe, `<a href="mailto:${email}">$1</a>`) : it} />)}</ul>
+        ) : (
+          <p set:html={emailRe ? b.items[0].replace(emailRe, `<a href="mailto:${email}">$1</a>`) : b.items[0]} />
+        ),
+      )}
+    </section>
+  ))}
+</article>
+
+<style>
+  .prose-page {
+    max-width: 760px;
+    padding-block: 3rem 2rem;
+  }
+
+  .page-head {
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2rem;
+  }
+
+  .page-head h1 {
+    font-size: clamp(1.75rem, 4.5vw, 2.5rem);
+    letter-spacing: -0.03em;
+    margin: 0 0 0.75rem;
+  }
+
+  .page-intro {
+    font-size: 1.0625rem;
+    color: var(--text-muted);
+    line-height: 1.75;
+    margin: 0;
+    max-width: 62ch;
+  }
+
+  .block {
+    margin-bottom: 2.25rem;
+  }
+
+  .block h2 {
+    font-size: 1.0625rem;
+    margin: 0 0 0.75rem;
+  }
+
+  .block p {
+    font-size: 0.9375rem;
+    line-height: 1.8;
+    color: var(--text-muted);
+    margin: 0 0 0.875rem;
+    max-width: 72ch;
+  }
+
+  .block ul {
+    margin: 0 0 0.875rem;
+    padding-left: 1.25rem;
+    max-width: 72ch;
+  }
+
+  .block li {
+    font-size: 0.9375rem;
+    line-height: 1.8;
+    color: var(--text-muted);
+    margin-bottom: 0.375rem;
+  }
+
+  .block :global(a) {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .block :global(a:hover) {
+    text-decoration: underline;
+  }
+</style>

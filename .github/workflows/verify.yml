@@ -1,0 +1,50 @@
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Guards against encoding corruption and stale generated data. Both have
+      # silently broken this project before.
+      - name: Repository hygiene
+        run: node scripts/check-repo.mjs
+
+      - name: Astro and TypeScript check
+        run: npm run check
+
+      # Verifies every country generates, that city/division/postal stay
+      # consistent, and that identifiers pass their format patterns.
+      - name: Generator test suite
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          SITE_URL: https://example.com
+
+      - name: Check for broken internal links
+        run: npx linkinator dist --silent --skip "^https?://"
+
+      - name: Check output size budget
+        run: node scripts/check-budget.mjs

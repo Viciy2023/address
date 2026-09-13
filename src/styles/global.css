@@ -1,0 +1,328 @@
+@import "tailwindcss";
+
+/**
+ * Design system: Minimalism & Swiss Style.
+ *
+ * Rationale: the page presents ~65 heterogeneous fields per record. Swiss
+ * minimalism gives the dense content a calm, systematic frame — a strict grid,
+ * generous whitespace *between* groups, and typographic hierarchy doing the
+ * work that colour and chrome would otherwise do. It also hits WCAG AAA, which
+ * a decorative style could not.
+ *
+ * Rules this file enforces:
+ *   - One accent colour only. It marks the primary action and nothing else.
+ *   - No shadows. Depth comes from hairline borders and whitespace.
+ *   - Zero border-radius on structural elements; pills only for status.
+ *   - All colours are semantic tokens, never raw hex in components.
+ *   - Light and dark are defined together so contrast is verified in both.
+ */
+
+@theme {
+  /* Neutral scale — does the heavy lifting. */
+  --color-ink-950: #0a0a0b;
+  --color-ink-900: #18181b;
+  --color-ink-800: #27272a;
+  --color-ink-700: #3f3f46;
+  --color-ink-600: #52525b;
+  --color-ink-500: #71717a;
+  --color-ink-400: #a1a1aa;
+  --color-ink-300: #d4d4d8;
+  --color-ink-200: #e4e4e7;
+  --color-ink-100: #f4f4f5;
+  --color-ink-50: #fafafa;
+
+  /* Single accent: a restrained blue that clears 4.5:1 on white. */
+  --color-accent-700: #1d4ed8;
+  --color-accent-600: #2563eb;
+  --color-accent-500: #3b82f6;
+  --color-accent-100: #dbeafe;
+  --color-accent-50: #eff6ff;
+
+  --color-danger-600: #dc2626;
+  --color-danger-50: #fef2f2;
+  --color-warn-600: #b45309;
+  --color-warn-50: #fffbeb;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", monospace;
+
+  /* Swiss grid: a 4px base with a deliberate jump for section rhythm. */
+  --spacing-section: 5rem;
+}
+
+@layer base {
+  :root {
+    --bg: var(--color-ink-50);
+    --surface: #ffffff;
+    --surface-2: var(--color-ink-100);
+    --text: var(--color-ink-900);
+    --text-muted: var(--color-ink-600);
+    --text-faint: var(--color-ink-500);
+    --border: var(--color-ink-200);
+    --border-strong: var(--color-ink-300);
+    --accent: var(--color-accent-600);
+    --accent-hover: var(--color-accent-700);
+    --accent-soft: var(--color-accent-50);
+    --on-accent: #ffffff;
+    --focus: var(--color-accent-600);
+    color-scheme: light;
+  }
+
+  .dark {
+    /* Dark values are chosen for contrast independently, not inverted. */
+    --bg: var(--color-ink-950);
+    --surface: var(--color-ink-900);
+    --surface-2: var(--color-ink-800);
+    --text: var(--color-ink-50);
+    --text-muted: var(--color-ink-400);
+    --text-faint: var(--color-ink-500);
+    --border: var(--color-ink-800);
+    --border-strong: var(--color-ink-700);
+    --accent: var(--color-accent-500);
+    --accent-hover: var(--color-accent-500);
+    --accent-soft: #172554;
+    --on-accent: #ffffff;
+    --focus: var(--color-accent-500);
+    color-scheme: dark;
+  }
+
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Visible focus for keyboard users on every interactive element. */
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--text);
+  }
+
+  h1, h2, h3, h4 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+
+  /* Respect the user's motion preference. */
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* ---------------------------------------------------------------- layout */
+
+  .shell {
+    width: 100%;
+    max-width: 1120px;
+    margin-inline: auto;
+    padding-inline: 1.25rem;
+  }
+
+  @media (min-width: 768px) {
+    .shell { padding-inline: 2rem; }
+  }
+
+  /* A hairline rule is the only separator the design uses. */
+  .rule {
+    border: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  /* --------------------------------------------------------------- buttons */
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    /* 44px minimum touch target. */
+    min-height: 44px;
+    padding: 0.625rem 1.125rem;
+    border: 1px solid transparent;
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
+
+  .btn-secondary {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--border-strong);
+  }
+  .btn-secondary:hover { background: var(--surface-2); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-muted);
+    border-color: transparent;
+  }
+  .btn-ghost:hover { color: var(--text); background: var(--surface-2); }
+
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* ---------------------------------------------------------------- inputs */
+
+  .field-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+  }
+
+  .select,
+  .input {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.5rem 2.25rem 0.5rem 0.75rem;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: 0;
+    font-size: 0.9375rem;
+    font-family: inherit;
+    appearance: none;
+    cursor: pointer;
+    transition: border-color 160ms ease;
+  }
+
+  .select:hover, .input:hover { border-color: var(--text-faint); }
+
+  /* Chevron drawn as a background so no icon font is needed. */
+  .select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2.5' stroke-linecap='square'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+  }
+
+  .dark .select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2.5' stroke-linecap='square'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  }
+
+  /* ----------------------------------------------------------------- cards */
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+
+  /* -------------------------------------------------------------- data rows */
+
+  .datarow {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    gap: 0.75rem;
+    padding: 0.625rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .datarow:last-child { border-bottom: 0; }
+
+  .datarow dt {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  .datarow dd {
+    margin: 0;
+    font-size: 0.875rem;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    word-break: break-word;
+    color: var(--text);
+    /* Long values (User-Agent, full address) must wrap, not clip. */
+    white-space: pre-wrap;
+  }
+
+  /* --------------------------------------------------------------- badges */
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    border: 1px solid var(--border-strong);
+    color: var(--text-muted);
+  }
+  .pill-warn {
+    border-color: transparent;
+    background: var(--color-warn-50);
+    color: var(--color-warn-600);
+  }
+  .dark .pill-warn { background: #2a1f0a; color: #fbbf24; }
+
+  /* --------------------------------------------------------------- utility */
+
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  .muted { color: var(--text-muted); }
+  .faint { color: var(--text-faint); }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+    padding: 0.75rem 1rem;
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+  .skip-link:focus {
+    left: 0;
+  }
+}

@@ -1,0 +1,26 @@
+# Build output
+dist/
+.astro/
+
+# Dependencies
+node_modules/
+
+# Generated data caches (regenerate with `npm run data`)
+.cache/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*

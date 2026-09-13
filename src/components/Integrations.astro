@@ -1,0 +1,36 @@
+---
+/**
+ * Optional third-party integrations, rendered only when configured.
+ *
+ * The privacy policy is generated from the same flags, so it can never claim a
+ * service that is not present (or omit one that is) — the defect in the legacy
+ * site, which declared Google Analytics and AdSense while shipping neither.
+ *
+ * Nothing here runs unless the corresponding env var is set:
+ *   ADSENSE_CLIENT      -> ad script + consent banner + ads.txt
+ *   CF_ANALYTICS_TOKEN  -> cookieless analytics (no banner needed)
+ */
+import { SITE } from "../config";
+
+const hasAds = SITE.adsenseClient.length > 0;
+const hasAnalytics = SITE.analyticsToken.length > 0;
+---
+
+{hasAds && (
+  <>
+    <script
+      is:inline
+      async
+      src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${SITE.adsenseClient}`}
+      crossorigin="anonymous"></script>
+    <meta name="google-adsense-account" content={SITE.adsenseClient} />
+  </>
+)}
+
+{hasAnalytics && (
+  <script
+    is:inline
+    defer
+    src="https://static.cloudflareinsights.com/beacon.min.js"
+    data-cf-beacon={JSON.stringify({ token: SITE.analyticsToken })}></script>
+)}

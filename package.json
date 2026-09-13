@@ -1,0 +1,35 @@
+{
+  "name": "address-generator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Multi-country synthetic identity and address generator",
+  "license": "MIT",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check && tsc --noEmit",
+    "data": "node scripts/build-data.mjs && node scripts/build-names.mjs && node scripts/build-index.mjs",
+    "test": "tsx scripts/smoke-test.ts",
+    "links": "linkinator dist --silent --skip \"^https?://\"",
+    "verify": "npm run check && npm run build && npm run test"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.7.4",
+    "@astrojs/svelte": "^9.0.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "astro": "^7.3.2",
+    "svelte": "^5.57.0",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@faker-js/faker": "^10.6.0",
+    "@tailwindcss/typography": "^0.5.19",
+    "linkinator": "^8.1.0",
+    "sharp": "^0.35.4",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

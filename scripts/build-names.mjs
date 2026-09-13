@@ -1,0 +1,176 @@
+/**
+ * Extracts person-name pools from @faker-js/faker into a compact JSON file
+ * that ships to the browser.
+ *
+ * Why sampling instead of reading locale data directly: faker stores pools
+ * across many partial locale files, and the raw locale definitions are
+ * incomplete for non-Latin locales (zh_CN, ko). The only reliable way to learn
+ * what a locale can actually produce is to ask the runtime, which resolves the
+ * whole fallback chain internally. We therefore draw a large sample per locale
+ * and de-duplicate it.
+ *
+ * Shipping faker itself is not an option: the package is ~2.8 MB even though
+ * only name lists are needed.
+ *
+ * Licensing: @faker-js/faker is MIT. Attribution is written to
+ * src/data/ATTRIBUTION.md and rendered on the site's credits page.
+ *
+ * Usage:  node scripts/build-names.mjs
+ */
+
+import fs from "node:fs";
+import path from "node:path";
+import { allFakers } from "@faker-js/faker";
+
+const ROOT = path.resolve(import.meta.dirname, "..");
+const OUT_DIR = path.join(ROOT, "src", "data", "names");
+const LEGACY_OUT = path.join(ROOT, "src", "data", "names.json");
+
+/** ISO country code -> faker locale chain (first match wins per draw). */
+const LOCALE_MAP = {
+  US: ["en_US"],
+  CA: ["en_CA", "fr_CA"],
+  GB: ["en_GB"],
+  AU: ["en_AU"],
+  NZ: ["en_AU"],
+  DE: ["de"],
+  FR: ["fr"],
+  IT: ["it"],
+  ES: ["es"],
+  PT: ["pt_PT"],
+  NL: ["nl"],
+  SE: ["sv"],
+  NO: ["nb_NO"],
+  PL: ["pl"],
+  RU: ["ru"],
+  CN: ["zh_CN"],
+  TW: ["zh_TW"],
+  HK: ["en_HK", "zh_TW"],
+  MO: ["pt_PT", "zh_TW"],
+  JP: ["ja"],
+  KR: ["ko"],
+  IN: ["en_IN"],
+  ID: ["id_ID"],
+  MY: ["en", "en_IN"],
+  SG: ["en", "zh_CN", "en_IN"],
+  TH: ["th"],
+  VN: ["vi"],
+  AE: ["ar", "en"],
+  SA: ["ar"],
+  IL: ["he"],
+  TR: ["tr"],
+  BR: ["pt_BR"],
+  MX: ["es_MX"],
+  ZA: ["en_ZA"],
+};
+
+/** Pool sizes kept per country. Bigger pools cost bytes, so keep them lean. */
+const LIMITS = { first: 120, last: 120, middle: 40, prefix: 8, suffix: 8, job: 40 };
+
+/** Draws attempted per pool before de-duplication. */
+const DRAWS = { first: 900, last: 900, middle: 300, prefix: 80, suffix: 80, job: 300 };
+
+/** Samples a faker method many times and returns unique non-empty strings. */
+function collect(faker, method, draws, limit) {
+  const seen = new Set();
+  for (let i = 0; i < draws && seen.size < limit * 3; i++) {
+    try {
+      const v = faker.person[method]();
+      if (typeof v === "string" && v.trim()) seen.add(v.trim());
+    } catch {
+      break; // locale cannot supply this field at all
+    }
+  }
+  const arr = [...seen];
+  return arr;
+}
+
+/**
+ * Evenly samples down to `n` items. Taking the first n would bias towards
+ * whatever order faker's pool happens to have (often alphabetical).
+ */
+function sample(arr, n) {
+  if (arr.length <= n) return arr;
+  const step = arr.length / n;
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(arr[Math.floor(i * step)]);
+  return out;
+}
+
+const result = {};
+const report = [];
+
+for (const [cc, chain] of Object.entries(LOCALE_MAP)) {
+  const pools = { first: [], last: [], middle: [], prefix: [], suffix: [], job: [] };
+
+  // Merge draws from every locale in the chain, weighted towards the primary.
+  for (let i = 0; i < chain.length; i++) {
+    const id = chain[i];
+    const faker = allFakers[id];
+    if (!faker) continue;
+    const weight = i === 0 ? 1 : 0.35;
+    pools.first.push(...collect(faker, "firstName", Math.round(DRAWS.first * weight), LIMITS.first));
+    pools.last.push(...collect(faker, "lastName", Math.round(DRAWS.last * weight), LIMITS.last));
+    pools.middle.push(...collect(faker, "middleName", Math.round(DRAWS.middle * weight), LIMITS.middle));
+    pools.prefix.push(...collect(faker, "prefix", Math.round(DRAWS.prefix * weight), LIMITS.prefix));
+    pools.suffix.push(...collect(faker, "suffix", Math.round(DRAWS.suffix * weight), LIMITS.suffix));
+    pools.job.push(...collect(faker, "jobTitle", Math.round(DRAWS.job * weight), LIMITS.job));
+  }
+
+  const entry = {};
+  for (const key of Object.keys(LIMITS)) {
+    const unique = [...new Set(pools[key])];
+    entry[key] = sample(unique, LIMITS[key]);
+  }
+
+  result[cc] = entry;
+  report.push([cc, entry.first.length, entry.last.length, entry.middle.length, entry.job.length, entry.prefix.length]);
+}
+
+fs.mkdirSync(OUT_DIR, { recursive: true });
+// One file per country so the client can lazy-load only what it needs.
+for (const [cc, entry] of Object.entries(result)) {
+  fs.writeFileSync(path.join(OUT_DIR, `${cc}.json`), JSON.stringify(entry));
+}
+// Remove the previous monolithic file if it is still around.
+if (fs.existsSync(LEGACY_OUT)) fs.rmSync(LEGACY_OUT);
+
+fs.writeFileSync(
+  path.join(OUT_DIR, "ATTRIBUTION.md"),
+  `# Data attribution
+
+This site bundles data derived from the following free sources. Attribution is
+required by their licences and is rendered on the site's credits page.
+
+## GeoNames
+
+- https://www.geonames.org/
+- Licence: Creative Commons Attribution 4.0 (CC-BY 4.0)
+- Used for: administrative divisions, city names, population ranks, time zones
+  and postal codes (\`src/data/countries/*.json\`).
+
+## Faker (@faker-js/faker)
+
+- https://fakerjs.dev/
+- Licence: MIT
+- Used for: person name pools and job title patterns (\`src/data/names.json\`).
+
+## Unicode CLDR
+
+- https://cldr.unicode.org/
+- Licence: Unicode License v3
+- Used for: country, language and currency display names.
+`,
+);
+
+console.log("\ncc   first  last  middle  prefix   job");
+for (const [cc, f, l, m, j, p] of report) {
+  console.log(
+    `${cc.padEnd(4)} ${String(f).padStart(5)} ${String(l).padStart(5)} ${String(m).padStart(7)} ${String(p).padStart(7)} ${String(j).padStart(5)}`,
+  );
+}
+const totalKB = Object.keys(result).reduce((n, cc) => n + fs.statSync(path.join(OUT_DIR, `${cc}.json`)).size, 0) / 1024;
+console.log(`\nwritten: ${OUT_DIR}/*.json  (${totalKB.toFixed(1)} KB total, ${Object.keys(result).length} files)`);
+
+const problems = report.filter(([, f, l]) => f < 20 || l < 20).map((r) => `${r[0]}(first=${r[1]},last=${r[2]})`);
+if (problems.length) console.log(`WARNING thin pools: ${problems.join(", ")}`);

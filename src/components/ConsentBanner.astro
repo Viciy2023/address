@@ -1,0 +1,134 @@
+---
+/**
+ * Cookie/ads consent banner.
+ *
+ * Only rendered when advertising is actually configured. Because the site
+ * itself stores nothing but a theme preference, there is nothing to consent to
+ * in the default configuration — showing a banner anyway would be noise, and
+ * claiming consent requirements you do not have is its own kind of inaccuracy.
+ *
+ * The choice is stored in localStorage and never sent anywhere.
+ */
+import { SITE, type SiteLang } from "../config";
+
+interface Props {
+  lang: SiteLang;
+}
+const { lang, } = Astro.props as Props;
+
+const COPY = {
+  zh: {
+    text: "本站使用 Google AdSense 展示广告。Google 及其合作伙伴可能使用 Cookie 基于你此前的访问记录投放广告。",
+    accept: "接受",
+    decline: "拒绝",
+    more: "隐私政策",
+  },
+  en: {
+    text: "This site uses Google AdSense to display advertising. Google and its partners may use cookies to serve ads based on your prior visits.",
+    accept: "Accept",
+    decline: "Decline",
+    more: "Privacy Policy",
+  },
+  ja: {
+    text: "本サイトは Google AdSense による広告を表示します。Google とそのパートナーは、過去のアクセス履歴に基づいて Cookie を使用し広告を配信する場合があります。",
+    accept: "同意する",
+    decline: "拒否する",
+    more: "プライバシーポリシー",
+  },
+  ko: {
+    text: "이 사이트는 Google AdSense로 광고를 표시합니다. Google과 파트너는 이전 방문 기록을 기반으로 쿠키를 사용해 광고를 게재할 수 있습니다.",
+    accept: "동의",
+    decline: "거부",
+    more: "개인정보 처리방침",
+  },
+}[lang];
+
+const policyHref = lang === "zh" ? "/privacy/" : `/${lang}/privacy/`;
+---
+
+<div class="consent" id="consent" role="dialog" aria-labelledby="consent-text" hidden>
+  <p id="consent-text">{COPY.text}</p>
+  <div class="consent-actions">
+    <a href={policyHref} class="consent-link">{COPY.more}</a>
+    <button type="button" class="btn btn-secondary" data-consent="decline">{COPY.decline}</button>
+    <button type="button" class="btn btn-primary" data-consent="accept">{COPY.accept}</button>
+  </div>
+</div>
+
+<script>
+  // Show the banner only until a choice has been recorded.
+  (function () {
+    const KEY = "consent.ads";
+    const el = document.getElementById("consent");
+    if (!el) return;
+
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem(KEY);
+    } catch {}
+
+    if (!stored) el.hidden = false;
+
+    el.addEventListener("click", (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-consent]");
+      if (!btn) return;
+      try {
+        localStorage.setItem(KEY, btn.dataset.consent ?? "accept");
+      } catch {}
+      el.hidden = true;
+    });
+  })();
+</script>
+
+<style>
+  .consent {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 80;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    padding: 1rem 1.25rem;
+    background: var(--surface);
+    border-top: 1px solid var(--border-strong);
+    box-shadow: 0 -1px 0 var(--border);
+  }
+
+  .consent[hidden] {
+    display: none;
+  }
+
+  .consent p {
+    flex: 1 1 22rem;
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  .consent-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-inline-start: auto;
+  }
+
+  .consent-link {
+    font-size: 0.8125rem;
+    color: var(--accent);
+    text-decoration: none;
+    margin-inline-end: 0.5rem;
+  }
+
+  .consent-link:hover {
+    text-decoration: underline;
+  }
+
+  @media (min-width: 900px) {
+    .consent {
+      padding-inline: max(1.25rem, calc((100vw - 1120px) / 2 + 2rem));
+    }
+  }
+</style>

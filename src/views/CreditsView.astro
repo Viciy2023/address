@@ -1,0 +1,228 @@
+---
+/**
+ * Data sources and licence attribution.
+ *
+ * This page exists because the CC-BY 4.0 licence on GeoNames *requires*
+ * visible attribution, and because the MIT licence on faker requires the
+ * copyright notice to be reproduced. It is a legal obligation, not decoration.
+ */
+import { SITE, type SiteLang } from "../config";
+import { t } from "../i18n/strings";
+import { totalCityCount, totalDivisionCount, availableCountries } from "../lib/data";
+
+interface Props {
+  lang: SiteLang;
+}
+const { lang } = Astro.props as Props;
+const s = t(lang);
+
+const countries = availableCountries().length;
+const divisions = totalDivisionCount();
+const cities = totalCityCount();
+
+const L = {
+  zh: {
+    intro: "本站的数据来自以下自由授权的开源数据集。我们在此向维护者致谢。",
+    geonamesDesc: "行政区划、城市名称、人口排序、时区与邮政编码。",
+    fakerDesc: "各国姓名库与职业名称模式。",
+    cldrDesc: "国家、语言与货币的显示名称。",
+    licence: "许可",
+    usage: "用途",
+    stats: "数据规模",
+    statsBody: `当前收录 ${countries} 个国家和地区、${divisions} 个行政区、${cities} 个城市。`,
+    modify: "我们对原始数据做了以下处理：按人口筛选城市、按行政区聚合邮编前缀、将姓名池抽样压缩以减少传输体积。生成过程中的随机变化由本站的算法产生，不属于原始数据。",
+    noWarranty: "各数据源均按「现状」提供，不对准确性作任何保证。",
+  },
+  en: {
+    intro: "This site is built on the openly licensed datasets below. We are grateful to their maintainers.",
+    geonamesDesc: "Administrative divisions, city names, population ranking, time zones and postal codes.",
+    fakerDesc: "Person name pools and job title patterns for each country.",
+    cldrDesc: "Display names for countries, languages and currencies.",
+    licence: "Licence",
+    usage: "Used for",
+    stats: "Data volume",
+    statsBody: `Currently covering ${countries} countries and regions, ${divisions} administrative divisions and ${cities} cities.`,
+    modify: "We transform the source data as follows: cities are filtered and ranked by population, postal prefixes are aggregated per administrative division, and name pools are sampled and compacted to reduce transfer size. The randomisation applied during generation is produced by this site's own algorithm and is not part of the source data.",
+    noWarranty: "All sources are provided \"as is\", without warranty of accuracy.",
+  },
+  ja: {
+    intro: "本サイトは以下のオープンライセンスデータセットを利用しています。メンテナの皆様に感謝します。",
+    geonamesDesc: "行政区画、都市名、人口順位、タイムゾーン、郵便番号。",
+    fakerDesc: "各国の姓名データと職種名のパターン。",
+    cldrDesc: "国名・言語名・通貨名の表示名。",
+    licence: "ライセンス",
+    usage: "用途",
+    stats: "データ規模",
+    statsBody: `現在 ${countries} の国と地域、${divisions} の行政区、${cities} の都市を収録しています。`,
+    modify: "元データには以下の加工を施しています：都市は人口で選別・整列、郵便番号の接頭辞は行政区単位で集約、姓名データは転送量削減のため抽出・圧縮しています。生成時のランダム化は本サイト独自のアルゴリズムによるもので、元データには含まれません。",
+    noWarranty: "各データソースは「現状のまま」提供され、正確性について保証はありません。",
+  },
+  ko: {
+    intro: "이 사이트는 아래의 오픈 라이선스 데이터셋을 기반으로 합니다. 유지보수자분들께 감사드립니다.",
+    geonamesDesc: "행정 구역, 도시 이름, 인구 순위, 시간대, 우편번호.",
+    fakerDesc: "각국의 이름 데이터와 직업명 패턴.",
+    cldrDesc: "국가·언어·통화의 표시 이름.",
+    licence: "라이선스",
+    usage: "용도",
+    stats: "데이터 규모",
+    statsBody: `현재 ${countries}개 국가·지역, ${divisions}개 행정 구역, ${cities}개 도시를 수록하고 있습니다.`,
+    modify: "원본 데이터는 다음과 같이 가공했습니다. 도시는 인구 기준으로 선별·정렬하고, 우편번호 접두사는 행정 구역 단위로 집계하며, 이름 데이터는 전송량 절감을 위해 추출·압축했습니다. 생성 시의 무작위화는 이 사이트 자체 알고리즘이 만들며 원본 데이터에 포함되지 않습니다.",
+    noWarranty: "모든 데이터 소스는 '있는 그대로' 제공되며 정확성을 보증하지 않습니다.",
+  },
+}[lang];
+
+const sources = [
+  {
+    name: "GeoNames",
+    url: "https://www.geonames.org/",
+    licence: "Creative Commons Attribution 4.0 (CC-BY 4.0)",
+    licenceUrl: "https://creativecommons.org/licenses/by/4.0/",
+    desc: L.geonamesDesc,
+  },
+  {
+    name: "@faker-js/faker",
+    url: "https://fakerjs.dev/",
+    licence: "MIT",
+    licenceUrl: "https://github.com/faker-js/faker/blob/next/LICENSE",
+    desc: L.fakerDesc,
+  },
+  {
+    name: "Unicode CLDR",
+    url: "https://cldr.unicode.org/",
+    licence: "Unicode License v3",
+    licenceUrl: "https://www.unicode.org/license.txt",
+    desc: L.cldrDesc,
+  },
+];
+---
+
+<article class="shell page prose">
+  <header class="page-head">
+    <h1>{s.creditsTitle}</h1>
+    <p class="page-intro">{L.intro}</p>
+  </header>
+
+  <section class="block">
+    <h2>{L.stats}</h2>
+    <p>{L.statsBody}</p>
+  </section>
+
+  <section class="block">
+    {sources.map((src) => (
+      <div class="source">
+        <h3>
+          <a href={src.url} target="_blank" rel="noopener noreferrer">{src.name}</a>
+        </h3>
+        <dl class="source-meta">
+          <div>
+            <dt>{L.usage}</dt>
+            <dd>{src.desc}</dd>
+          </div>
+          <div>
+            <dt>{L.licence}</dt>
+            <dd>
+              <a href={src.licenceUrl} target="_blank" rel="noopener noreferrer">{src.licence}</a>
+            </dd>
+          </div>
+        </dl>
+      </div>
+    ))}
+  </section>
+
+  <section class="block">
+    <h2>{lang === "zh" ? "数据加工说明" : lang === "ja" ? "データ加工について" : lang === "ko" ? "데이터 가공 안내" : "How we transform the data"}</h2>
+    <p>{L.modify}</p>
+    <p class="faint">{L.noWarranty}</p>
+  </section>
+</article>
+
+<style>
+  .page {
+    padding-block: 3rem 2rem;
+    max-width: 760px;
+  }
+
+  .page-head {
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2rem;
+  }
+
+  .page-head h1 {
+    font-size: clamp(1.75rem, 4.5vw, 2.5rem);
+    letter-spacing: -0.03em;
+    margin: 0 0 0.75rem;
+  }
+
+  .page-intro {
+    font-size: 1.0625rem;
+    color: var(--text-muted);
+    margin: 0;
+    max-width: 62ch;
+    line-height: 1.75;
+  }
+
+  .block { margin-bottom: 2.25rem; }
+
+  .block h2 {
+    font-size: 1.0625rem;
+    margin: 0 0 0.75rem;
+  }
+
+  .block p {
+    font-size: 0.9375rem;
+    line-height: 1.8;
+    color: var(--text-muted);
+    margin: 0 0 0.875rem;
+    max-width: 72ch;
+  }
+
+  .source {
+    padding: 1.25rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .source:first-child { border-top: 1px solid var(--border); }
+
+  .source h3 {
+    font-size: 1rem;
+    margin: 0 0 0.75rem;
+  }
+
+  .source h3 a {
+    color: var(--text);
+    text-decoration: none;
+  }
+  .source h3 a:hover { color: var(--accent); }
+
+  .source-meta {
+    display: grid;
+    gap: 0.5rem;
+    margin: 0;
+  }
+
+  .source-meta div {
+    display: grid;
+    grid-template-columns: 6rem 1fr;
+    gap: 1rem;
+    align-items: baseline;
+  }
+
+  .source-meta dt {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+  }
+
+  .source-meta dd {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+  }
+
+  :global(.prose .source-meta a),
+  .source-meta :global(a) {
+    color: var(--accent);
+    text-decoration: none;
+  }
+</style>

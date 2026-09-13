@@ -1,0 +1,184 @@
+---
+/**
+ * Country directory. Exists mainly as an internal-linking surface: it gives
+ * crawlers a real page listing every supported country, which the single-page
+ * generator cannot provide on its own.
+ */
+import { COUNTRY_BY_CODE, COUNTRIES } from "../lib/registry";
+import { getCountrySummary } from "../lib/data";
+import type { SiteLang } from "../config";
+import { t } from "../i18n/strings";
+
+interface Props {
+  lang: SiteLang;
+}
+const { lang } = Astro.props as Props;
+const s = t(lang);
+
+/** Only countries that actually have bundled data. */
+const rows = COUNTRIES.filter((c) => getCountrySummary(c.code)).map((c) => {
+  const summary = getCountrySummary(c.code)!;
+  return {
+    code: c.code,
+    name: c.name[lang],
+    divisions: summary.states.length,
+    // City counts live in the per-country detail; the index carries totals only.
+    cities: c.code,
+    postal: summary.postalStyle,
+    realPostal: summary.postalReal,
+    idName: c.id.name[lang],
+    idReal: c.id.hasRealChecksum,
+    currency: c.currency,
+  };
+});
+
+const headers =
+  lang === "zh"
+    ? ["国家和地区", "ISO", "行政区", "城市", "邮编格式", "证件号码", "货币"]
+    : lang === "ja"
+      ? ["国・地域", "ISO", "行政区", "都市", "郵便番号形式", "公的番号", "通貨"]
+      : lang === "ko"
+        ? ["국가·지역", "ISO", "행정구역", "도시", "우편번호 형식", "공적 번호", "통화"]
+        : ["Country / region", "ISO", "Divisions", "Cities", "Postal format", "National ID", "Currency"];
+
+/** Per-country city totals come from the generated stats file. */
+const cityCounts: Record<string, number> = (await import("../data/city-counts.json")).default;
+
+const note =
+  lang === "zh"
+    ? "「邮编格式」列中标注 ✓ 表示邮编来自 GeoNames 的真实数据；标注 ~ 表示该国无权威数据源，按格式生成。"
+    : lang === "ja"
+      ? "「郵便番号形式」列の ✓ は GeoNames の実データに基づくことを、~ は正式なデータ源がなく形式に沿って生成していることを示します。"
+      : lang === "ko"
+        ? "'우편번호 형식' 열의 ✓는 GeoNames 실제 데이터 기반, ~는 공식 데이터 소스가 없어 형식에 맞춰 생성했음을 뜻합니다."
+        : "In the Postal format column, ✓ means the codes come from real GeoNames data; ~ means no authoritative source exists and codes are generated to format.";
+---
+
+<article class="shell page">
+  <header class="page-head">
+    <h1>{s.countriesTitle}</h1>
+    <p class="page-intro">{s.countriesSub}</p>
+  </header>
+
+  <div class="table-wrap">
+    <table>
+      <caption class="sr-only">{s.countriesTitle}</caption>
+      <thead>
+        <tr>
+          {headers.map((h) => <th scope="col">{h}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr id={r.code.toLowerCase()}>
+            <th scope="row">{r.name}</th>
+            <td class="mono">{r.code}</td>
+            <td class="num">{r.divisions}</td>
+            <td class="num">{cityCounts[r.code] ?? 0}</td>
+            <td class="mono">
+              {r.postal === "none" ? "—" : r.postal}
+              <span class={r.realPostal ? "mark ok" : "mark warn"} title={r.realPostal ? "GeoNames" : s.disclaimerTitle}>
+                {r.realPostal ? "✓" : "~"}
+              </span>
+            </td>
+            <td>{r.idName}</td>
+            <td class="mono">{r.currency}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note faint">{note}</p>
+</article>
+
+<style>
+  .page {
+    padding-block: 3rem 2rem;
+  }
+
+  .page-head {
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2rem;
+  }
+
+  .page-head h1 {
+    font-size: clamp(1.75rem, 4.5vw, 2.5rem);
+    letter-spacing: -0.03em;
+    margin: 0 0 0.75rem;
+  }
+
+  .page-intro {
+    font-size: 1.0625rem;
+    color: var(--text-muted);
+    margin: 0;
+    max-width: 62ch;
+    line-height: 1.75;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    min-width: 720px;
+  }
+
+  th, td {
+    padding: 0.625rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  thead th {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+    font-weight: 600;
+    background: var(--surface-2);
+    position: sticky;
+    top: 0;
+  }
+
+  tbody th {
+    font-weight: 500;
+  }
+
+  tbody tr:hover {
+    background: var(--surface-2);
+  }
+
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .mark {
+    margin-left: 0.375rem;
+    font-size: 0.75rem;
+  }
+  .mark.ok { color: var(--accent); }
+  .mark.warn { color: var(--color-warn-600); }
+
+  .note {
+    font-size: 0.75rem;
+    margin-top: 1rem;
+    max-width: 80ch;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+</style>

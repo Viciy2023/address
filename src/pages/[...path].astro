@@ -1,0 +1,203 @@
+---
+/**
+ * Single route file for the entire site.
+ *
+ * Why one catch-all rather than Astro's i18n router or per-language folders:
+ *
+ *   1. The route table in `src/routes.ts` drives pages, sitemap and hreflang
+ *      from one list. A page can never exist in one of those and be missing
+ *      from another — which is exactly how the legacy implementation ended up
+ *      with four pages carrying duplicate hreflang tags and forty carrying
+ *      relative URLs.
+ *   2. The default language stays at "/" with no prefix; the others live under
+ *      "/en/", "/ja/", "/ko/", matching the hreflang declarations.
+ *   3. Adding a language or a page is a one-line change.
+ */
+import type { GetStaticPaths } from "astro";
+import Base from "../layouts/Base.astro";
+import HomeView from "../views/HomeView.astro";
+import ProsePage from "../views/ProsePage.astro";
+import CountriesView from "../views/CountriesView.astro";
+import CreditsView from "../views/CreditsView.astro";
+import { ROUTES, type RouteDef } from "../routes";
+import { LANGS, SITE, type SiteLang, absolute } from "../config";
+import { t } from "../i18n/strings";
+import { ABOUT, CONTACT, TERMS, type PageCopy } from "../content";
+import { buildPrivacy } from "../privacy";
+import { availableCountries, totalCityCount, totalDivisionCount } from "../lib/data";
+
+interface PathProps {
+  lang: SiteLang;
+  route: RouteDef;
+}
+
+export const getStaticPaths: GetStaticPaths = () => {
+  const paths: { params: { path: string | undefined }; props: Record<string, unknown> }[] = [];
+  for (const lang of LANGS) {
+    for (const route of ROUTES) {
+      // Home sits at the language root: "" for zh, "en"/"ja"/"ko" otherwise.
+      // Content pages are "<lang>/<page>" for the non-default languages.
+      const param =
+        route.path === ""
+          ? lang === "zh"
+            ? undefined
+            : lang
+          : lang === "zh"
+            ? route.path
+            : `${lang}/${route.path}`;
+      paths.push({ params: { path: param }, props: { lang, route } as unknown as Record<string, unknown> });
+    }
+  }
+  return paths;
+};
+
+const { lang, route } = Astro.props as unknown as PathProps;
+const s = t(lang);
+const isHome = route.path === "";
+
+const codes = availableCountries();
+
+/* ------------------------------------------------------ titles & meta */
+
+const totalCities = totalCityCount();
+const totalDivisions = totalDivisionCount();
+
+const homeDescription =
+  lang === "zh"
+    ? `免费在线生成 ${codes.length} 个国家和地区的真实格式身份信息：姓名、地址、邮编、电话、证件号、职业与在线资料。共 ${totalDivisions} 个行政区、${totalCities} 个城市，字段内部一致且可复现。`
+    : lang === "ja"
+      ? `${codes.length} の国と地域の実際の形式に沿った身元情報を無料生成。氏名、住所、郵便番号、電話、公的番号、職業、オンラインプロフィールに対応。${totalDivisions} の行政区と ${totalCities} の都市を収録。`
+      : lang === "ko"
+        ? `${codes.length}개 국가와 지역의 실제 형식에 맞는 신원 정보를 무료로 생성합니다. 이름, 주소, 우편번호, 전화, 공적 번호, 직업, 온라인 프로필을 지원합니다.`
+        : `Generate realistic-format identity data for ${codes.length} countries and regions for free: names, addresses, postal codes, phone numbers, national IDs, employment and online profiles. ${totalDivisions} divisions and ${totalCities} cities, internally consistent and reproducible.`;
+
+const homeTitle =
+  lang === "zh"
+    ? `${s.heroTitle} - ${codes.length} 个国家和地区真实格式数据 | ${s.brand}`
+    : lang === "ja"
+      ? `${s.heroTitle} - ${codes.length} の国と地域に対応 | ${s.brand}`
+      : lang === "ko"
+        ? `${s.heroTitle} - ${codes.length}개 국가 및 지역 지원 | ${s.brand}`
+        : `${s.heroTitle} - Realistic Data for ${codes.length} Countries | ${s.brand}`;
+
+const COPY: Record<string, PageCopy> = {
+  about: ABOUT[lang],
+  contact: CONTACT[lang],
+  privacy: buildPrivacy(lang),
+  terms: TERMS[lang],
+};
+const copy: PageCopy | undefined = COPY[route.path];
+const pagePath = `/${route.path}/`;
+
+const title = isHome
+  ? homeTitle
+  : copy
+    ? `${copy.title} | ${s.brand}`
+    : route.path === "countries"
+      ? `${s.countriesTitle} | ${s.brand}`
+      : `${s.creditsTitle} | ${s.brand}`;
+
+const description = isHome
+  ? homeDescription
+  : (copy?.intro ?? (route.path === "countries" ? s.countriesSub : s.disclaimerBody));
+
+/* -------------------------------------------------------- structured data */
+
+const webApp = {
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  name: s.heroTitle,
+  url: absolute("/", lang),
+  description: homeDescription,
+  applicationCategory: "DeveloperApplication",
+  operatingSystem: "Any",
+  browserRequirements: "Requires JavaScript",
+  inLanguage: lang,
+  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+};
+
+const faqItems: [string, string][] =
+  lang === "zh"
+    ? [
+        ["生成的信息是真实的吗？", "不是。所有字段都由算法合成，不对应任何真实个人、住址或账户，仅用于软件测试、表单演示和数据填充。"],
+        ["为什么城市、行政区和邮编能对上？", "因为三者来自同一条真实数据记录：先选定行政区，再从该行政区的城市中选取，最后按该行政区真实的邮编前缀生成，因此不会互相矛盾。"],
+        ["同一个种子会得到相同结果吗？", "会。种子决定全部随机取值，相同种子配合相同国家和性别必然得到完全一致的结果，便于测试复现。"],
+        ["证件号码能通过校验吗？", "多数国家实现了官方校验位算法，例如巴西 CPF、土耳其 T.C. Kimlik、西班牙 DNI。少数国家只保证格式正确，界面会标注「仅格式」。"],
+      ]
+    : lang === "ja"
+      ? [
+          ["生成される情報は実在しますか？", "いいえ。すべてアルゴリズムによる合成データで、実在の人物・住所・アカウントとは関係ありません。ソフトウェアテストやフォームのデモ用です。"],
+          ["なぜ市区町村・行政区・郵便番号が整合するのですか？", "3 つとも同一の実データ行から導出しているためです。まず行政区を選び、その中の都市を選び、その行政区の実際の郵便番号規則で生成します。"],
+          ["同じシードなら同じ結果になりますか？", "はい。シードがすべての乱数を決定するため、同じシード・国・性別なら完全に同一の結果が再現されます。"],
+          ["公的番号は検証を通りますか？", "多くの国で公式のチェックディジットを実装しています（ブラジル CPF、トルコ T.C. Kimlik、スペイン DNI など）。一部の国は形式のみで、UI に「形式のみ」と表示します。"],
+        ]
+      : lang === "ko"
+        ? [
+            ["생성된 정보는 실제인가요?", "아닙니다. 모든 필드는 알고리즘이 합성한 것이며 실존하는 인물·주소·계정과 무관합니다. 소프트웨어 테스트, 양식 시연, 데이터 입력용입니다."],
+            ["도시·행정구역·우편번호가 왜 일치하나요?", "세 값 모두 동일한 실제 데이터 행에서 파생되기 때문입니다. 먼저 행정구역을 정하고, 그 안의 도시를 고르고, 해당 행정구역의 실제 우편번호 규칙으로 생성합니다."],
+            ["같은 시드는 같은 결과를 만드나요?", "네. 시드가 모든 난수를 결정하므로 같은 시드·국가·성별이면 완전히 동일한 결과가 재현됩니다."],
+            ["공적 번호가 검증을 통과하나요?", "대부분의 국가에서 공식 체크디지트 알고리즘을 구현했습니다(브라질 CPF, 터키 T.C. Kimlik, 스페인 DNI 등). 일부 국가는 형식만 보장하며 UI에 '형식만'으로 표시됩니다."],
+          ]
+        : [
+            ["Is the generated information real?", "No. Every field is synthesised by an algorithm and does not correspond to any real person, address or account. It is intended for software testing, form demos and data seeding."],
+            ["Why do the city, division and postal code always agree?", "Because all three derive from the same real data record: a division is chosen first, then a city within it, then a postal code built from that division's genuine prefix rules."],
+            ["Does the same seed produce the same result?", "Yes. The seed determines every random draw, so the same seed, country and gender always reproduce an identical identity — which is what makes it useful in tests."],
+            ["Do the national ID numbers pass validation?", "Most countries implement the official check-digit algorithm, including Brazilian CPF, Turkish T.C. Kimlik and Spanish DNI. A few guarantee format only, and the interface marks those as format-only."],
+          ];
+
+const faqLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  inLanguage: lang,
+  mainEntity: faqItems.map(([q, a]) => ({
+    "@type": "Question",
+    name: q,
+    acceptedAnswer: { "@type": "Answer", text: a },
+  })),
+};
+
+const groupLabels =
+  lang === "zh"
+    ? ["身份信息", "地址与联系方式", "信用卡信息", "教育信息", "职业信息", "生活方式", "个人信息", "在线资料", "社交媒体"]
+    : lang === "ja"
+      ? ["身元情報", "住所と連絡先", "クレジットカード", "学歴", "職歴", "ライフスタイル", "個人情報", "オンラインプロフィール", "ソーシャルメディア"]
+      : lang === "ko"
+        ? ["신원 정보", "주소 및 연락처", "신용카드", "학력", "경력", "라이프스타일", "개인 정보", "온라인 프로필", "소셜 미디어"]
+        : ["Identity", "Address & contact", "Credit card", "Education", "Employment", "Lifestyle", "Personal", "Online profile", "Social media"];
+
+const sectionTitles =
+  lang === "zh"
+    ? { fields: "包含哪些字段", faq: "常见问题" }
+    : lang === "ja"
+      ? { fields: "含まれる項目", faq: "よくある質問" }
+      : lang === "ko"
+        ? { fields: "포함된 항목", faq: "자주 묻는 질문" }
+        : { fields: "What is included", faq: "Frequently asked questions" };
+
+const breadcrumb = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    { "@type": "ListItem", position: 1, name: s.brand, item: absolute("/", lang) },
+    { "@type": "ListItem", position: 2, name: title, item: absolute(pagePath, lang) },
+  ],
+};
+---
+
+<Base
+  {lang}
+  path={isHome ? "/" : pagePath}
+  {title}
+  {description}
+  jsonLd={isHome ? [webApp, faqLd] : [breadcrumb]}
+>
+  {isHome ? (
+    <HomeView {lang} {codes} {groupLabels} {faqItems} {sectionTitles} />
+  ) : copy ? (
+    <ProsePage {copy} email={SITE.email} />
+  ) : route.path === "countries" ? (
+    <CountriesView {lang} />
+  ) : (
+    <CreditsView {lang} />
+  )}
+</Base>
