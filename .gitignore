@@ -13,6 +13,18 @@ node_modules/
 .env.local
 .env.*.local
 
+# Credentials and cloud provider config.
+# A Cloudflare API token was accidentally staged for commit once and caught
+# before it was pushed. Anything holding a secret must be listed here so a
+# `git add -A` can never pick it up.
+.wrangler/
+wrangler.toml
+*.pem
+*.key
+credentials.json
+cf.md
+secrets.md
+
 # Editor / OS
 .vscode/
 .idea/

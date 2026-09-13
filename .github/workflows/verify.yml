@@ -43,6 +43,20 @@ jobs:
         env:
           SITE_URL: https://example.com
 
+      # The path Cloudflare Pages actually uses. CI above exercises the
+      # SITE_URL override, which would mask a config that cannot read
+      # CF_PAGES_URL — the exact bug that once shipped canonical tags pointing
+      # at localhost. This step rebuilds the way Pages does and asserts the
+      # origin is honoured.
+      - name: Build as Cloudflare Pages does
+        run: |
+          npm run build
+          node scripts/check-budget.mjs
+        env:
+          CF_PAGES: "1"
+          CF_PAGES_BRANCH: main
+          CF_PAGES_URL: https://ci-check.pages.dev
+
       # Every internal link must resolve to a built file, and every #anchor to
       # an id on the target page. Offline and deterministic.
       - name: Check internal links

@@ -134,6 +134,44 @@ if (missingPages.length) {
   failures.push(`country pages incomplete (${missingPages.length}):\n    ${[...new Set(missingPages)].slice(0, 10).join("\n    ")}`);
 }
 
+/* ---------------------------------------------------- origin integrity */
+
+/**
+ * Absolute URLs are baked into the HTML at build time, so a wrong origin is
+ * unfixable after deployment. This guard exists because it has already gone
+ * wrong once: the config read `SITE_URL`, Cloudflare Pages injects
+ * `CF_PAGES_URL`, and every canonical tag shipped pointing at
+ * `http://localhost:4321` — which Google refuses to index.
+ *
+ * The check is that the origin actually written into the output matches the
+ * origin the build resolved. When `SITE_URL` or `CF_PAGES_URL` is set, any
+ * localhost reference in the output means the resolution was broken.
+ */
+const configuredOrigin = (process.env.SITE_URL || process.env.CF_PAGES_URL || "").replace(/\/+$/, "");
+
+const homeHtml = fs.readFileSync(path.join(DIST, "index.html"), "utf8");
+const canonical = /rel="canonical" href="([^"]+)"/.exec(homeHtml)?.[1] ?? "";
+
+if (configuredOrigin) {
+  if (canonical !== `${configuredOrigin}/`) {
+    failures.push(
+      `canonical origin does not match the configured origin:\n` +
+        `    expected ${configuredOrigin}/ but the output says ${canonical || "(none)"}\n` +
+        `    (config.ts must read BOTH SITE_URL and CF_PAGES_URL)`,
+    );
+  }
+  if (/localhost|127\.0\.0\.1/.test(homeHtml)) {
+    failures.push("built HTML references localhost while a public origin was configured");
+  }
+}
+
+// Every absolute self-reference must use one origin; a stray localhost in the
+// sitemap is the same failure one step removed.
+const sitemapLocalhost = /<(loc|href)>[^<]*localhost/.test(sitemap);
+if (configuredOrigin && sitemapLocalhost) {
+  failures.push("sitemap references localhost while a public origin was configured");
+}
+
 /* --------------------------------------------------------------- report */
 
 const totalRaw = files.reduce((n, f) => n + fs.statSync(f).size, 0);
@@ -143,6 +181,8 @@ const htmlCount = files.filter((f) => f.endsWith(".html")).length;
 console.log("build budget");
 console.log(`  files            ${String(files.length).padStart(6)} / ${LIMITS.files}`);
 console.log(`  html pages       ${String(htmlCount).padStart(6)} (${countryCodes.length} countries x ${LANGS.length} languages + fixed)`);
+console.log(`  origin           ${configuredOrigin || "(localhost default)"}`);
+console.log(`  canonical        ${canonical}`);
 console.log(`  total raw        ${(totalRaw / 1024 / 1024).toFixed(2).padStart(6)} MB`);
 console.log(`  initial JS       ${(jsGzip / 1024).toFixed(1).padStart(6)} KB gzip / ${(LIMITS.initialJsGzip / 1024).toFixed(0)} KB`);
 console.log(`  initial CSS      ${(cssGzip / 1024).toFixed(1).padStart(6)} KB gzip / ${(LIMITS.initialCssGzip / 1024).toFixed(0)} KB`);

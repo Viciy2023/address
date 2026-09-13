@@ -47,18 +47,79 @@ npm run dev               # http://localhost:4321
 
 ### Environment
 
-Only `SITE_URL` is required. It is the single place a domain appears — every
-canonical URL, sitemap entry, `hreflang` tag and `robots.txt` line is derived
-from it at build time, so changing domains is a one-line change plus a rebuild.
+On Cloudflare Pages you configure **nothing**. Pages injects `CF_PAGES_URL`
+into every build — the exact URL that deployment will be served at — and the
+site reads it to build all absolute URLs. The canonical tags, sitemap and
+`robots.txt` therefore match the live domain automatically, including the
+`<project>.pages.dev` default.
+
+The origin is resolved in this order:
+
+| Order | Source | When it applies |
+| --- | --- | --- |
+| 1 | `SITE_URL` | Explicit override: a custom domain, a local build, or a host that does not announce its own URL |
+| 2 | `CF_PAGES_URL` | Cloudflare Pages builds — chosen automatically |
+| 3 | `http://localhost:4321` | Development default |
 
 | Variable | Required | Effect when set | Effect when empty |
 | --- | --- | --- | --- |
-| `SITE_URL` | yes | Canonical origin for all generated URLs | Falls back to localhost |
-| `ADSENSE_CLIENT` | no | Loads AdSense, shows the consent banner, emits `ads.txt` | No ads, no banner, privacy policy states no third-party services are used |
+| `SITE_URL` | no | Overrides the detected origin | The origin comes from `CF_PAGES_URL`, or localhost |
+| `ADSENSE_CLIENT` | no | Loads AdSense, shows the consent banner, emits `ads.txt` | No ads, no banner; privacy policy states no third-party services are used |
 | `CF_ANALYTICS_TOKEN` | no | Loads Cloudflare Web Analytics (cookieless) | No analytics |
 
 The privacy policy is generated from these flags rather than hand-written, so
 it cannot claim a service the site does not use.
+
+#### Preview deployments
+
+Cloudflare Pages serves every non-production branch and pull request from its
+own URL (`<hash>.<project>.pages.dev`) running the same build. To stop a
+preview copy from being indexed in place of the real site, builds whose
+`CF_PAGES_BRANCH` is not the production branch emit `noindex, nofollow` and a
+`Disallow: /` robots.txt. No configuration is required.
+
+## Deployment
+
+### Cloudflare Pages (Git integration)
+
+1. Push this repository to GitHub (already done for `Viciy2023/address`).
+2. In the Cloudflare dashboard: **Workers & Pages → Create → Pages → Connect to Git**.
+3. Select the repository and configure the build:
+   - **Framework preset:** Astro
+   - **Build command:** `npm run build`
+   - **Build output directory:** `dist`
+   - **Environment variables:** none required
+4. Deploy. The site appears at `https://<project-name>.pages.dev`.
+
+Node 22 is pinned in `.node-version`, which Pages' V2 build image honours.
+
+Every subsequent push to the production branch rebuilds and redeploys.
+
+See **[DEPLOY.md](DEPLOY.md)** for the full walkthrough, preview-deployment
+behaviour, and a post-deploy checklist.
+
+### Any static host (including a NAS)
+
+`dist/` is plain static files with no runtime dependency:
+
+```bash
+npm ci
+npm run build
+# then serve dist/ with nginx, Caddy, or anything else
+```
+
+For a host that does not announce its own URL, set `SITE_URL` before building so
+the absolute URLs point at the right origin.
+
+### Deploy to Cloudflare Pages with Wrangler
+
+If you prefer a direct upload from the command line instead of Git integration:
+
+```bash
+npx wrangler login                        # one-time, interactive
+npm run build
+npx wrangler pages deploy dist --project-name=<project-name>
+```
 
 ## Commands
 

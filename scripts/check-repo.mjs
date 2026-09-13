@@ -19,6 +19,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const TEXT_EXT = new Set([".ts", ".mts", ".tsx", ".js", ".mjs", ".astro", ".svelte", ".json", ".css", ".md", ".txt", ".xml"]);
@@ -37,6 +38,97 @@ function walk(dir, acc = []) {
 }
 
 const files = walk(ROOT);
+
+/* ----------------------------------------------------- secrets */
+
+/**
+ * Scans tracked files for credential-shaped strings.
+ *
+ * This exists because a Cloudflare API token was once staged by a blanket
+ * `git add -A` and only noticed by eye. A token in a public repository is
+ * live the moment it is pushed and must be revoked, so the check is cheap
+ * insurance against an expensive mistake.
+ *
+ * Patterns are deliberately specific: a generic "long random string" rule
+ * would flag content hashes, lockfile integrity values and build IDs, and a
+ * noisy check gets ignored.
+ */
+const SECRET_PATTERNS = [
+  // Cloudflare API tokens look like cfut_<50+ chars>, cfoat_..., cfsz_...
+  // The prefix is not a fixed length, so match any short lowercase run after
+  // "cf". An earlier version required exactly one letter and silently missed
+  // the real "cfut_" form.
+  { name: "Cloudflare API token", re: /\bcf[a-z]{1,6}_[A-Za-z0-9_-]{30,}/ },
+  // Google service-account private keys (API keys are public and not matched).
+  { name: "Google service-account key", re: /"private_key"\s*:\s*"-----BEGIN/ },
+  { name: "Google API key", re: /\bAIza[0-9A-Za-z_-]{35}\b/ },
+  { name: "GitHub token", re: /\bgh[pousr]_[A-Za-z0-9]{36,}\b/ },
+  { name: "AWS access key id", re: /\bAKIA[0-9A-Z]{16}\b/ },
+  { name: "OpenAI API key", re: /\bsk-[A-Za-z0-9]{32,}\b/ },
+  { name: "private key block", re: /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/ },
+];
+
+const SECRET_SCAN_EXT = new Set([".ts", ".mts", ".js", ".mjs", ".json", ".md", ".txt", ".yml", ".yaml", ".toml", ".astro", ".svelte", ".css"]);
+
+/**
+ * Only files git actually tracks can leak. Scanning the working tree instead
+ * would flag gitignored credential files (such as a local `cf.md` holding a
+ * real API token) — which is exactly where those secrets are supposed to live,
+ * and reporting them would train the reader to ignore this check.
+ */
+function trackedFiles() {
+  try {
+    const out = execFileSync("git", ["ls-files", "-z"], { cwd: ROOT, encoding: "utf8" });
+    return out.split("\0").filter(Boolean).map((rel) => path.join(ROOT, rel));
+  } catch {
+    // No git (a tarball, for instance): fall back to the working tree.
+    return files;
+  }
+}
+
+const tracked = trackedFiles();
+
+const secretHits = [];
+for (const f of tracked) {
+  if (!SECRET_SCAN_EXT.has(path.extname(f))) continue;
+  const rel = path.relative(ROOT, f);
+  // This file necessarily contains the patterns themselves.
+  if (rel === path.join("scripts", "check-repo.mjs")) continue;
+  const text = fs.readFileSync(f, "utf8");
+  for (const { name, re } of SECRET_PATTERNS) {
+    if (re.test(text)) secretHits.push(`${rel}: possible ${name}`);
+  }
+}
+
+if (secretHits.length) {
+  problems.push(
+    `possible credentials committed (revoke any real one immediately):\n  ${secretHits.join("\n  ")}`,
+  );
+}
+
+// A staged file bypasses `git ls-files`, so also scan what is about to be
+// committed. This is the state the mistake was actually made in.
+try {
+  const staged = execFileSync("git", ["diff", "--cached", "--name-only", "-z"], { cwd: ROOT, encoding: "utf8" })
+    .split("\0")
+    .filter(Boolean);
+  const stagedHits = [];
+  for (const rel of staged) {
+    if (!SECRET_SCAN_EXT.has(path.extname(rel))) continue;
+    if (rel === path.join("scripts", "check-repo.mjs")) continue;
+    const full = path.join(ROOT, rel);
+    if (!fs.existsSync(full)) continue;
+    const text = fs.readFileSync(full, "utf8");
+    for (const { name, re } of SECRET_PATTERNS) {
+      if (re.test(text)) stagedHits.push(`${rel}: possible ${name}`);
+    }
+  }
+  if (stagedHits.length) {
+    problems.push(`possible credentials staged for commit:\n  ${stagedHits.join("\n  ")}`);
+  }
+} catch {
+  // git unavailable; the tracked scan above already covers the repository.
+}
 
 /* ---------------------------------------------------- encoding */
 
@@ -118,8 +210,12 @@ if (!fs.existsSync(attribution)) {
 /* --------------------------------------------------------- config */
 
 const configSrc = fs.readFileSync(path.join(ROOT, "src", "config.ts"), "utf8");
-if (!configSrc.includes("SITE_URL")) {
-  problems.push("src/config.ts no longer reads SITE_URL — the domain must stay configurable");
+// The origin must stay resolvable from the environment. SITE_URL is the manual
+// override; CF_PAGES_URL is how Cloudflare Pages announces its own URL.
+for (const name of ["SITE_URL", "CF_PAGES_URL"]) {
+  if (!configSrc.includes(name)) {
+    problems.push(`src/config.ts no longer reads ${name} — the domain must stay configurable`);
+  }
 }
 
 // A hard-coded domain anywhere except config.ts would defeat the point.
