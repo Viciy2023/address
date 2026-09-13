@@ -39,9 +39,6 @@ export interface Strings {
   copyAll: string;
   copyJson: string;
   downloadCsv: string;
-  expandAll: string;
-  collapseAll: string;
-  showMore: string;
   copy: string;
   copied: string;
 
@@ -63,6 +60,9 @@ export interface Strings {
   syntheticPostal: string;
   seedLabel: string;
   seedHint: string;
+  /** Summary card meta labels. */
+  summaryAge: string;
+  summaryDob: string;
   emptyState: string;
 
   // keyboard
@@ -119,9 +119,7 @@ const zh: Strings = {
   copyAll: "复制全部",
   copyJson: "复制 JSON",
   downloadCsv: "导出 CSV",
-  expandAll: "展开全部",
-  collapseAll: "收起全部",
-  showMore: "展开",
+
   copy: "复制",
   copied: "已复制",
 
@@ -141,6 +139,8 @@ const zh: Strings = {
   syntheticPostal: "无权威数据，按格式生成",
   seedLabel: "种子",
   seedHint: "相同种子可复现同一结果",
+  summaryAge: "年龄",
+  summaryDob: "出生日期",
   emptyState: "选择国家与行政区后点击「生成」",
 
   shortcutHint: "按 R 重新生成，按 C 复制全部",
@@ -193,9 +193,7 @@ const en: Strings = {
   copyAll: "Copy all",
   copyJson: "Copy JSON",
   downloadCsv: "Download CSV",
-  expandAll: "Expand all",
-  collapseAll: "Collapse all",
-  showMore: "Show",
+
   copy: "Copy",
   copied: "Copied",
 
@@ -215,6 +213,8 @@ const en: Strings = {
   syntheticPostal: "No authoritative data; format-correct",
   seedLabel: "Seed",
   seedHint: "The same seed reproduces the same identity",
+  summaryAge: "Age",
+  summaryDob: "Date of birth",
   emptyState: "Choose a country and division, then select Generate",
 
   shortcutHint: "Press R to regenerate, C to copy everything",
@@ -267,9 +267,7 @@ const ja: Strings = {
   copyAll: "すべてコピー",
   copyJson: "JSON をコピー",
   downloadCsv: "CSV をダウンロード",
-  expandAll: "すべて展開",
-  collapseAll: "すべて折りたたむ",
-  showMore: "展開",
+
   copy: "コピー",
   copied: "コピーしました",
 
@@ -289,6 +287,8 @@ const ja: Strings = {
   syntheticPostal: "正式データなし（形式準拠）",
   seedLabel: "シード",
   seedHint: "同じシードなら同じ結果を再現できます",
+  summaryAge: "年齢",
+  summaryDob: "生年月日",
   emptyState: "国と行政区を選び「生成」をクリックしてください",
 
   shortcutHint: "R で再生成、C ですべてコピー",
@@ -341,9 +341,7 @@ const ko: Strings = {
   copyAll: "전체 복사",
   copyJson: "JSON 복사",
   downloadCsv: "CSV 다운로드",
-  expandAll: "전체 펼치기",
-  collapseAll: "전체 접기",
-  showMore: "펼치기",
+
   copy: "복사",
   copied: "복사됨",
 
@@ -363,6 +361,8 @@ const ko: Strings = {
   syntheticPostal: "공식 데이터 없음(형식 준수)",
   seedLabel: "시드",
   seedHint: "같은 시드는 같은 결과를 재현합니다",
+  summaryAge: "나이",
+  summaryDob: "생년월일",
   emptyState: "국가와 행정 구역을 선택한 뒤 '생성'을 누르세요",
 
   shortcutHint: "R 키로 다시 생성, C 키로 전체 복사",
