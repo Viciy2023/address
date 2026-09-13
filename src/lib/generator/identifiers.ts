@@ -6,6 +6,22 @@
  * so the value passes format validators — a common requirement when testing
  * signup flows.
  *
+ * Identifiers are not independent of the rest of the record. Several schemes
+ * encode the holder's date of birth and sex *inside the number*:
+ *
+ *   CN  resident ID   region(6) + YYYYMMDD + seq(3) + check
+ *   KR  resident no.  YYMMDD + century/sex digit + seq
+ *   SE  personnummer  YYMMDD + seq + check
+ *   NO  fødselsnummer DDMMYY + seq + check
+ *   PL  PESEL         YYMMDD(century-shifted) + seq + check
+ *   ZA  ID number     YYMMDD + seq + check
+ *   AE  Emirates ID   year of birth in field 2
+ *
+ * When each generator drew its own date, the ID contradicted the profile it was
+ * part of — a Chinese record showed a birth date of 1991-08-06 beside an ID
+ * reading 1978-07-02. Identifiers that need these values now receive them in
+ * `IdContext` instead of inventing their own.
+ *
  * The `demo` flag surfaced by the generator is `!hasRealChecksum` from the
  * registry, and drives a "format only" note in the UI. These values are
  * synthetic; they are not, and cannot be, issued identifiers.
@@ -14,6 +30,34 @@
 import type { Rng } from "./rng.js";
 
 const L = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+/**
+ * Facts about the record that some identifier schemes encode internally.
+ * All fields are optional so that identifiers with no such dependency keep
+ * their single-argument shape.
+ */
+export interface IdContext {
+  /** ISO birth date, "YYYY-MM-DD". */
+  birthDate?: string;
+  gender?: "male" | "female";
+  /**
+   * Region prefix for schemes that require one (the 6-digit code at the start
+   * of a Chinese resident ID). Taken from the chosen administrative division so
+   * the ID agrees with the address on the same record.
+   */
+  regionCode?: string;
+  /** 2-digit year of birth, used by schemes that store only the decade. */
+  birthYear2?: string;
+  /** 1-digit century/sex marker used by the Korean scheme. */
+  century?: string;
+}
+
+/** Splits an ISO date into the numeric parts schemes need. */
+function parts(ctx: IdContext): { yyyy: string; yy: string; mm: string; dd: string } | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ctx.birthDate ?? "");
+  if (!m) return null;
+  return { yyyy: m[1], yy: m[1].slice(2), mm: m[2], dd: m[3] };
+}
 
 /** US SSN. Post-2011 rules: area 001-899 excluding 666; group 01-99; serial 0001-9999. */
 function ssn(rng: Rng): string {
@@ -120,13 +164,24 @@ function nlBsn(rng: Rng): string {
   return rng.digits(9);
 }
 
-/** Swedish personnummer: YYMMDD-XXXX with a Luhn check digit. */
-function sePersonnummer(rng: Rng): string {
-  const year = String(rng.int(50, 99));
-  const month = String(rng.int(1, 12)).padStart(2, "0");
-  const day = String(rng.int(1, 28)).padStart(2, "0");
-  const serial = rng.digits(3);
-  const payload = year + month + day + serial;
+/**
+ * Swedish personnummer: YYMMDD-XXXX with a Luhn check digit.
+ *
+ * The third digit of the serial (the ninth digit overall) is odd for male and
+ * even for female.
+ */
+function sePersonnummer(rng: Rng, ctx: IdContext): string {
+  const d = parts(ctx);
+  const year = d ? d.yy : String(rng.int(50, 99));
+  const month = d ? d.mm : String(rng.int(1, 12)).padStart(2, "0");
+  const day = d ? d.dd : String(rng.int(1, 28)).padStart(2, "0");
+
+  const serial2 = String(rng.int(0, 99)).padStart(2, "0");
+  const wantOdd = ctx.gender === "male" ? true : ctx.gender === "female" ? false : rng.chance(0.5);
+  const lastDigit = rng.int(0, 9);
+  const serial3 = String(Number(lastDigit) % 2 === (wantOdd ? 1 : 0) ? lastDigit : (lastDigit + 1) % 10);
+
+  const payload = year + month + day + serial2 + serial3;
   let sum = 0;
   for (let i = 0; i < payload.length; i++) {
     let v = Number(payload[i]);
@@ -141,21 +196,31 @@ function sePersonnummer(rng: Rng): string {
 }
 
 /** Norwegian fødselsnummer: DDMMYY + 5 digits (format only). */
-function noFnr(rng: Rng): string {
-  const day = String(rng.int(1, 28)).padStart(2, "0");
-  const month = String(rng.int(1, 12)).padStart(2, "0");
-  const year = String(rng.int(50, 99));
+function noFnr(rng: Rng, ctx: IdContext): string {
+  const d = parts(ctx);
+  const day = d ? d.dd : String(rng.int(1, 28)).padStart(2, "0");
+  const month = d ? d.mm : String(rng.int(1, 12)).padStart(2, "0");
+  const year = d ? d.yy : String(rng.int(50, 99));
   return `${day}${month}${year}${rng.digits(5)}`;
 }
 
-/** Polish PESEL: 11 digits, checksum = (10 - (weighted sum % 10)) % 10. */
-function plPesel(rng: Rng): string {
-  const yy = String(rng.int(0, 99)).padStart(2, "0");
-  let mm = rng.int(1, 12);
-  const day = String(rng.int(1, 28)).padStart(2, "0");
-  // Century encoding: 1800s +80, 1900s +0, 2000s +20
-  const century = [80, 0, 20][rng.int(0, 2)];
-  mm += century;
+/**
+ * Polish PESEL: 11 digits, checksum = (10 - (weighted sum % 10)) % 10.
+ *
+ * The month field carries a century offset: 1800s +80, 1900s +0, 2000s +20,
+ * so the encoded year is unambiguous across centuries.
+ */
+function plPesel(rng: Rng, ctx: IdContext): string {
+  const d = parts(ctx);
+  const yy = d ? d.yy : String(rng.int(0, 99)).padStart(2, "0");
+  const birthYear = d ? Number(d.yyyy) : 1900 + Number(yy);
+
+  let mm = d ? Number(d.mm) : rng.int(1, 12);
+  const day = d ? d.dd : String(rng.int(1, 28)).padStart(2, "0");
+
+  const centuryOffset = birthYear >= 2000 ? 20 : birthYear >= 1900 ? 0 : birthYear >= 1800 ? 80 : 0;
+  mm += centuryOffset;
+
   const serial = rng.digits(4);
   const payload = yy + String(mm).padStart(2, "0") + day + serial;
   const weights = [1, 3, 7, 9, 1, 3, 7, 9, 1, 3];
@@ -171,15 +236,39 @@ function ruSnils(rng: Rng): string {
   return `${base.slice(0, 3)}-${base.slice(3, 6)}-${base.slice(6)} ${rng.digits(2)}`;
 }
 
-/** Chinese resident ID: 18 digits, last char is an ISO 7064 MOD 11-2 check. */
-function cnResidentId(rng: Rng): string {
-  // Region code: a real-looking 6-digit administrative prefix.
-  const region = String(rng.int(110000, 659000)).slice(0, 6);
-  const year = rng.int(1950, 2005);
-  const month = String(rng.int(1, 12)).padStart(2, "0");
-  const day = String(rng.int(1, 28)).padStart(2, "0");
-  const seq = String(rng.int(1, 999)).padStart(3, "0");
-  const payload = `${region}${year}${month}${day}${seq}`;
+/**
+ * Chinese resident ID (居民身份证号): 18 digits.
+ *
+ *   1-6    administrative division code (GB/T 2260)
+ *   7-14   date of birth, YYYYMMDD
+ *   15-17  sequence; the 17th digit is odd for male, even for female
+ *   18     ISO 7064 MOD 11-2 check character
+ *
+ * The birth date and sex must match the rest of the record: a resident ID whose
+ * embedded date disagrees with the profile is the kind of inconsistency that
+ * makes test data useless.
+ */
+function cnResidentId(rng: Rng, ctx: IdContext): string {
+  const d = parts(ctx);
+
+  // Region: a real division prefix when the caller supplied one, otherwise a
+  // plausible 6-digit code. Using the division keeps the ID consistent with the
+  // address on the same record.
+  const region = ctx.regionCode && /^\d{6}$/.test(ctx.regionCode)
+    ? ctx.regionCode
+    : String(rng.int(110000, 659000)).slice(0, 6);
+
+  const year = d ? d.yyyy : String(rng.int(1950, 2005));
+  const month = d ? d.mm : String(rng.int(1, 12)).padStart(2, "0");
+  const day = d ? d.dd : String(rng.int(1, 28)).padStart(2, "0");
+
+  // Sequence: two random digits, then a third whose parity encodes sex.
+  const seq2 = String(rng.int(0, 99)).padStart(2, "0");
+  const wantOdd = ctx.gender === "male" ? true : ctx.gender === "female" ? false : rng.chance(0.5);
+  const last = String(rng.int(0, 9));
+  const seq3 = seq2 + (Number(last) % 2 === (wantOdd ? 1 : 0) ? last : String((Number(last) + 1) % 10));
+
+  const payload = `${region}${year}${month}${day}${seq3}`;
   const weights = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
   const table = "10X98765432";
   let sum = 0;
@@ -235,12 +324,26 @@ function jpMyNumber(rng: Rng): string {
 }
 
 /** Korean RRN: 6 digits + hyphen + 7 digits (format only). */
-function krRrn(rng: Rng): string {
-  const yy = String(rng.int(50, 99)).padStart(2, "0");
-  const mm = String(rng.int(1, 12)).padStart(2, "0");
-  const dd = String(rng.int(1, 28)).padStart(2, "0");
-  const century = rng.pick(["1", "2", "3", "4"]);
-  return `${yy}${mm}${dd}-${century}${rng.digits(6)}`;
+/**
+ * Korean resident registration number (주민등록번호): YYMMDD-GNNNNNN.
+ *
+ * The digit after the hyphen encodes both century and sex: 1/2 for the 1900s,
+ * 3/4 for the 2000s, 5/6 for the 1800s, with the odd values male and the even
+ * values female. The birth date and sex come from the record.
+ */
+function krRrn(rng: Rng, ctx: IdContext): string {
+  const d = parts(ctx);
+  const yy = d ? d.yy : String(rng.int(50, 99)).padStart(2, "0");
+  const mm = d ? d.mm : String(rng.int(1, 12)).padStart(2, "0");
+  const dd = d ? d.dd : String(rng.int(1, 28)).padStart(2, "0");
+
+  const fullYear = d ? Number(d.yyyy) : 1900 + Number(yy);
+  const male = ctx.gender === "male";
+  // Century + sex: 1900s -> 1/2, 2000s -> 3/4, 1800s -> 9/0.
+  const centuryGender =
+    fullYear >= 2000 ? (male ? "3" : "4") : fullYear >= 1900 ? (male ? "1" : "2") : male ? "9" : "0";
+
+  return `${yy}${mm}${dd}-${centuryGender}${rng.digits(6)}`;
 }
 
 /** Indian PAN: 5 letters + 4 digits + 1 letter. */
@@ -289,8 +392,14 @@ function vnCitizen(rng: Rng): string {
 }
 
 /** UAE Emirates ID: 784-YYYY-NNNNNNN-C. */
-function aeEmiratesId(rng: Rng): string {
-  return `784-${rng.int(1960, 2005)}-${rng.digits(7)}-${rng.digits(1)}`;
+/**
+ * UAE Emirates ID: 784-YYYY-NNNNNNN-N. Field 2 is the year of birth, so it must
+ * match the record's own birth date.
+ */
+function aeEmiratesId(rng: Rng, ctx: IdContext): string {
+  const d = parts(ctx);
+  const year = d ? d.yyyy : String(rng.int(1960, 2005));
+  return `784-${year}-${rng.digits(7)}-${rng.digits(1)}`;
 }
 
 /** Saudi national ID: 10 digits starting with 1 (format only). */
@@ -344,22 +453,27 @@ function brCpf(rng: Rng): string {
  * Mexican CURP: 4 initials + 6 date digits + sex + 2-letter state +
  * 3 internal consonants + homoclave + check digit = 18 characters.
  */
-function mxCurp(rng: Rng): string {
+function mxCurp(rng: Rng, ctx: IdContext): string {
   const vowel = "AEIOU";
   const cons = "BCDFGHJKLMNPQRSTVWXYZ";
   const v = () => vowel[rng.int(0, 4)];
   const c = () => cons[rng.int(0, cons.length - 1)];
   const states = ["AS", "BC", "CM", "CS", "DF", "GT", "JC", "MC", "MN", "NL", "QR", "SL", "TC", "VZ", "YN", "ZS"];
-  // Homoclave: a digit for people born before 2000, a letter for 2000 onwards.
-  const yy = rng.int(50, 99);
+
+  const d = parts(ctx);
+  const yy = d ? d.yy : String(rng.int(50, 99));
+  const mm = d ? d.mm : String(rng.int(1, 12)).padStart(2, "0");
+  const dd = d ? d.dd : String(rng.int(1, 28)).padStart(2, "0");
+
+  // Position 11 is the sex: H for male (hombre), M for female (mujer).
+  const sex = ctx.gender === "male" ? "H" : ctx.gender === "female" ? "M" : rng.pick(["H", "M"]);
+
   const homoclave = rng.digit();
   const check = rng.digit();
   return (
     c() + v() + c() + c() +
-    String(yy) +
-    String(rng.int(1, 12)).padStart(2, "0") +
-    String(rng.int(1, 28)).padStart(2, "0") +
-    rng.pick(["H", "M"]) +
+    yy + mm + dd +
+    sex +
     rng.pick(states) +
     c() + c() + c() +
     homoclave +
@@ -368,10 +482,11 @@ function mxCurp(rng: Rng): string {
 }
 
 /** South African ID: YYMMDD + 4 digits + C + A + Z (Luhn check). */
-function zaId(rng: Rng): string {
-  const yy = String(rng.int(50, 99)).padStart(2, "0");
-  const mm = String(rng.int(1, 12)).padStart(2, "0");
-  const dd = String(rng.int(1, 28)).padStart(2, "0");
+function zaId(rng: Rng, ctx: IdContext): string {
+  const d = parts(ctx);
+  const yy = d ? d.yy : String(rng.int(50, 99)).padStart(2, "0");
+  const mm = d ? d.mm : String(rng.int(1, 12)).padStart(2, "0");
+  const dd = d ? d.dd : String(rng.int(1, 28)).padStart(2, "0");
   const seq = rng.digits(3) + rng.pick(["0", "1"]); // citizenship digit last
   const body = `${yy}${mm}${dd}${seq}`; // 12 chars
   const full = body + "8" + "2"; // 14 chars before check
@@ -390,7 +505,7 @@ function zaId(rng: Rng): string {
 }
 
 /** Dispatches on ISO country code. Unknown codes fall back to a numeric ID. */
-export function makeNationalId(code: string, rng: Rng): string {
+export function makeNationalId(code: string, rng: Rng, ctx: IdContext = {}): string {
   switch (code) {
     case "US": return ssn(rng);
     case "CA": return sin(rng);
@@ -403,29 +518,29 @@ export function makeNationalId(code: string, rng: Rng): string {
     case "ES": return esDni(rng);
     case "PT": return ptNif(rng);
     case "NL": return nlBsn(rng);
-    case "SE": return sePersonnummer(rng);
-    case "NO": return noFnr(rng);
-    case "PL": return plPesel(rng);
+    case "SE": return sePersonnummer(rng, ctx);
+    case "NO": return noFnr(rng, ctx);
+    case "PL": return plPesel(rng, ctx);
     case "RU": return ruSnils(rng);
-    case "CN": return cnResidentId(rng);
+    case "CN": return cnResidentId(rng, ctx);
     case "TW": return twId(rng);
     case "HK": return hkId(rng);
     case "MO": return moId(rng);
     case "JP": return jpMyNumber(rng);
-    case "KR": return krRrn(rng);
+    case "KR": return krRrn(rng, ctx);
     case "IN": return inPan(rng);
     case "ID": return idNik(rng);
     case "MY": return myKad(rng);
     case "SG": return sgNric(rng);
     case "TH": return thCitizen(rng);
     case "VN": return vnCitizen(rng);
-    case "AE": return aeEmiratesId(rng);
+    case "AE": return aeEmiratesId(rng, ctx);
     case "SA": return saNationalId(rng);
     case "IL": return ilId(rng);
     case "TR": return trKimlik(rng);
     case "BR": return brCpf(rng);
-    case "MX": return mxCurp(rng);
-    case "ZA": return zaId(rng);
+    case "MX": return mxCurp(rng, ctx);
+    case "ZA": return zaId(rng, ctx);
     default: return rng.digits(10);
   }
 }

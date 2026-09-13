@@ -315,5 +315,221 @@ console.log("\n=== national ID format validation ===");
   console.log(`  ${total - invalid}/${total} national IDs match their documented format`);
 }
 
+console.log("\n=== national ID embeds the real birth date ===");
+{
+  /*
+   * Six countries encode the holder's date of birth inside the national ID
+   * number itself. Each identifier was drawing its own date, independent of the
+   * birth date shown in the record, so the two always disagreed — a Chinese ID
+   * read 1978-07-02 while the profile said 1991-08-06.
+   *
+   * `extract` pulls the date back out of the generated ID in ISO form.
+   */
+  const DATE_IN_ID: Record<string, (id: string) => string | null> = {
+    // 6 region + YYYYMMDD + 3 seq + 1 check
+    CN: (id) => (id.length === 18 ? `${id.slice(6, 10)}-${id.slice(10, 12)}-${id.slice(12, 14)}` : null),
+    // YYMMDD-GNNNNNN
+    KR: (id) => {
+      const m = /^(\d{2})(\d{2})(\d{2})-/.exec(id);
+      if (!m) return null;
+      // Century digit: 1/2 = 1900s, 3/4 = 2000s, 5/6 = 1800s, 9/0 = 1800s
+      const c = id[7];
+      const century = c === "1" || c === "2" ? "19" : c === "3" || c === "4" ? "20" : c === "5" || c === "6" ? "18" : "18";
+      return `${century}${m[1]}-${m[2]}-${m[3]}`;
+    },
+    // YYMMDD-XXXX
+    //
+    // A Swedish personnummer stores only two year digits, so the century is
+    // ambiguous from the string alone. The same number is valid in 1903 and
+    // 2003; the separator ("" vs "+") is what distinguishes them, and the
+    // generator always emits "-". The test therefore accepts any century that
+    // lands on the right month and day, which is the property that can actually
+    // be checked here.
+    SE: (id) => {
+      const m = /^(\d{2})(\d{2})(\d{2})-/.exec(id);
+      return m ? `${m[2]}-${m[3]}` : null;
+    },
+    // DDMMYYXXXXX
+    NO: (id) => {
+      const m = /^(\d{2})(\d{2})(\d{2})/.exec(id);
+      return m ? `${m[2]}-${m[1]}` : null;
+    },
+    // YYMMDDXXXXX with a century offset added to the month
+    PL: (id) => {
+      const m = /^(\d{2})(\d{2})(\d{2})/.exec(id);
+      if (!m) return null;
+      let month = Number(m[2]);
+      let century = 1900;
+      if (month > 80) {
+        month -= 80;
+        century = 1800;
+      } else if (month > 60) {
+        month -= 60;
+        century = 2200;
+      } else if (month > 40) {
+        month -= 40;
+        century = 2100;
+      } else if (month > 20) {
+        month -= 20;
+        century = 2000;
+      }
+      return `${century + Number(m[1])}-${String(month).padStart(2, "0")}-${m[3]}`;
+    },
+  };
+
+  let checked = 0;
+  let mismatches = 0;
+  const examples: string[] = [];
+
+  for (const [code, extract] of Object.entries(DATE_IN_ID)) {
+    const spec = COUNTRY_BY_CODE[code];
+    const data = getCountryData(code);
+    if (!spec || !data) continue;
+    const name = getNamePool(code);
+
+    for (let i = 0; i < 30; i++) {
+      const id = generateIdentity(spec, { name, countryData: data }, { country: code, seed: randomSeed() });
+      const fromId = extract(id.map.idNumber ?? "");
+      checked++;
+      // SE and NO store no century, so only month+day is checkable.
+      const expected = code === "SE" || code === "NO"
+        ? id.map.birthDate.slice(5)
+        : id.map.birthDate;
+      if (fromId !== expected) {
+        mismatches++;
+        if (examples.length < 4) {
+          examples.push(`${code}: id says ${fromId}, profile says ${id.map.birthDate}`);
+        }
+      }
+    }
+  }
+
+  check(mismatches === 0, `${mismatches}/${checked} national IDs encode a birth date different from the profile`);
+  console.log(`  ${checked - mismatches}/${checked} national IDs embed the profile's own birth date`);
+  for (const e of examples) console.log(`    ${e}`);
+}
+
+console.log("\n=== national ID gender encoding ===");
+{
+  /*
+   * Some ID schemes encode sex in the sequence number. CN: the 17th digit is
+   * odd for male, even for female. KR: the first digit after the hyphen is
+   * 1/3 for male, 2/4 for female. Failing this makes the record self-
+   * contradictory in an obvious way.
+   */
+  const GENDER_IN_ID: Record<string, (id: string) => "male" | "female" | null> = {
+    CN: (id) => (id.length === 18 ? (Number(id[16]) % 2 === 1 ? "male" : "female") : null),
+    KR: (id) => {
+      const c = id[7];
+      if (!c) return null;
+      if (c === "1" || c === "3" || c === "5" || c === "9") return "male";
+      if (c === "2" || c === "4" || c === "6" || c === "0") return "female";
+      return null;
+    },
+  };
+
+  let checked = 0;
+  let mismatches = 0;
+  const examples: string[] = [];
+
+  for (const [code, extract] of Object.entries(GENDER_IN_ID)) {
+    const spec = COUNTRY_BY_CODE[code];
+    const data = getCountryData(code);
+    if (!spec || !data) continue;
+    const name = getNamePool(code);
+
+    for (const gender of ["male", "female"] as const) {
+      for (let i = 0; i < 20; i++) {
+        const id = generateIdentity(spec, { name, countryData: data }, { country: code, seed: randomSeed(), gender });
+        const inId = extract(id.map.idNumber ?? "");
+        checked++;
+        if (inId !== gender) {
+          mismatches++;
+          if (examples.length < 4) examples.push(`${code} ${gender}: id encodes ${inId}`);
+        }
+      }
+    }
+  }
+
+  check(mismatches === 0, `${mismatches}/${checked} national IDs encode the wrong sex`);
+  console.log(`  ${checked - mismatches}/${checked} national IDs encode the profile's own sex`);
+  for (const e of examples) console.log(`    ${e}`);
+}
+
+console.log("\n=== contact fields are well-formed ===");
+{
+  /*
+   * The email local-part was built by stripping everything outside [a-z] from
+   * the name. A Chinese, Japanese or Korean name strips to nothing, leaving
+   * ".42@yahoo.com" — a syntactically invalid address, not just an odd one.
+   */
+  const EMAIL_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/;
+  let checked = 0;
+  let bad = 0;
+  const examples: string[] = [];
+
+  for (const code of COUNTRY_CODES) {
+    const spec = COUNTRY_BY_CODE[code];
+    const data = getCountryData(code);
+    if (!spec || !data) continue;
+    const name = getNamePool(code);
+
+    for (let i = 0; i < 12; i++) {
+      const id = generateIdentity(spec, { name, countryData: data }, { country: code, seed: randomSeed() });
+      const email = id.map.email ?? "";
+      checked++;
+      if (!EMAIL_RE.test(email)) {
+        bad++;
+        if (examples.length < 5) examples.push(`${code}: ${JSON.stringify(email)}`);
+      }
+    }
+  }
+
+  check(bad === 0, `${bad}/${checked} generated emails are malformed`);
+  console.log(`  ${checked - bad}/${checked} emails are well-formed`);
+  for (const e of examples) console.log(`    ${e}`);
+}
+
+console.log("\n=== no ASCII place names inside CJK addresses ===");
+{
+  /*
+   * The CN/JP/KR templates concatenate state+city+street with no separator. A
+   * leftover ASCII city there produces "江西Jinfeng新华街1号" — a malformed
+   * address. Names may legitimately keep Latin where GeoNames has no local
+   * form, so this checks for the specific defect: ASCII directly adjacent to a
+   * CJK character with no separating space.
+   */
+  const ADJACENT_ASCII_CJK = /[\u4E00-\u9FFF][A-Za-z]|[A-Za-z][\u4E00-\u9FFF]/;
+  let checked = 0;
+  let bad = 0;
+  const examples: string[] = [];
+
+  for (const code of ["CN", "JP", "KR"]) {
+    const spec = COUNTRY_BY_CODE[code];
+    const data = getCountryData(code);
+    if (!spec || !data) continue;
+    const name = getNamePool(code);
+
+    for (const lang of ["zh", "ja", "ko"] as const) {
+      for (let i = 0; i < 15; i++) {
+        const id = generateIdentity(spec, { name, countryData: data }, { country: code, seed: randomSeed(), lang });
+        const addr = id.map.fullAddress ?? "";
+        checked++;
+        if (ADJACENT_ASCII_CJK.test(addr)) {
+          bad++;
+          if (examples.length < 5) {
+            const line = addr.split("\n").find((l) => ADJACENT_ASCII_CJK.test(l)) ?? addr;
+            examples.push(`${code}/${lang}: ${line}`);
+          }
+        }
+      }
+    }
+  }
+
+  check(bad === 0, `${bad}/${checked} CJK addresses mix ASCII into a CJK string`);
+  console.log(`  ${checked - bad}/${checked} CJK addresses contain no glued ASCII`);
+  for (const e of examples) console.log(`    ${e}`);
+}
+
 console.log(`\n${failures === 0 ? "PASS" : "FAIL"} — ${checks} checks, ${failures} failures`);
 process.exit(failures === 0 ? 0 : 1);

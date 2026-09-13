@@ -125,6 +125,28 @@ export interface CountrySpec {
   majors: LocalizedText[];
 }
 
+/**
+ * GeoNames admin-1 code -> GB/T 2260 province prefix for China.
+ *
+ * The Chinese resident ID begins with a 6-digit division code from GB/T 2260,
+ * and its first two digits identify the province. Our division codes come from
+ * GeoNames' admin1 scheme, which is unrelated — Chongqing is GeoNames "33" but
+ * GB/T "50". The postal prefix is not the same thing either (Chongqing's post
+ * codes start 40), so neither existing field can be reused.
+ *
+ * Deriving the ID's region from the division that the address already uses is
+ * what makes the two agree; a random 6-digit prefix would put a Guangdong
+ * address on a Beijing ID.
+ */
+export const CN_GB2260_PREFIX: Record<string, string> = {
+  "01": "34", "02": "33", "03": "36", "04": "32", "05": "22", "06": "63",
+  "07": "35", "08": "23", "09": "41", "10": "13", "11": "43", "12": "42",
+  "13": "65", "14": "54", "15": "62", "16": "45", "18": "52", "19": "21",
+  "20": "15", "21": "64", "22": "11", "23": "31", "24": "14", "25": "37",
+  "26": "61", "28": "12", "29": "53", "30": "44", "31": "46", "32": "51",
+  "33": "50",
+};
+
 const L = (zh: string, en: string, ja: string, ko: string): LocalizedText => ({ zh, en, ja, ko });
 
 /* ------------------------------------------------------------------ */

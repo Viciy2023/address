@@ -20,6 +20,7 @@ import { makePostal } from "./postal.js";
 import { makeNationalId } from "./identifiers.js";
 import type { CountrySpec, LocalizedText, Lang } from "../registry.js";
 import {
+  CN_GB2260_PREFIX,
   COUNTRY_BY_CODE,
   COUNTRY_CODES,
 } from "../registry.js";
@@ -106,11 +107,6 @@ export interface GenerateOptions {
 /* ------------------------------------------------------------------ */
 /* Static pools                                                        */
 /* ------------------------------------------------------------------ */
-
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
 
 const EYE_COLORS: L10n[] = [
   { zh: "棕色", en: "Brown", ja: "茶色", ko: "갈색" },
@@ -365,15 +361,37 @@ export function generateIdentity(
    */
   const divisionName = (opts.lang && division.nameL10n?.[opts.lang]) || division.name;
 
-  const city = division.cities.length ? rng.pick(division.cities) : null;
   /*
-   * The city name follows the same rule as the division name. For CJK address
-   * templates the value is concatenated onto the street line with no separator,
-   * so an ASCII city there produces "JiangxiJinfeng9471 Lake Dr" — a malformed
-   * string, not merely an untranslated one.
+   * Countries whose template concatenates state+city+street with no separator
+   * cannot carry an ASCII city name: the result is the malformed string
+   * "江西Jinfeng新华街1号". Where the requested language has no localized name
+   * for a city, that city is passed over in favour of one that does — the data
+   * has enough alternatives that restricting the pool costs nothing visible.
+   *
+   * Some divisions have no localized city in the requested language at all
+   * (Kochi's cities have no Korean names). There the city is dropped entirely
+   * and the division name stands in for it: the division is always localized,
+   * so the line stays well-formed rather than falling back to "고치 현Nankoku".
+   *
+   * Countries with Latin-script addresses are unaffected: they separate the
+   * parts, so an untranslated name is merely untranslated.
    */
+  const concatenated = Boolean(spec.address.streets);
+  const wantedLang = opts.lang;
+  const localizedCities =
+    concatenated && wantedLang
+      ? division.cities.filter((c) => c.nL10n?.[wantedLang])
+      : division.cities;
+
+  // `null` means "no city available in this language"; the caller then uses the
+  // division name alone.
+  const city = localizedCities.length ? rng.pick(localizedCities) : null;
+
   const cityName =
-    (opts.lang && city?.nL10n?.[opts.lang]) || city?.n || divisionName;
+    (wantedLang && city?.nL10n?.[wantedLang]) ||
+    city?.n ||
+    // A concatenated address omits the city rather than inserting ASCII.
+    (concatenated ? "" : divisionName);
 
   const postal = makePostal(division.postal, countryData.postalStyle, rng);
 
@@ -402,7 +420,24 @@ export function generateIdentity(
 
   const fullName = [firstName, middleName, lastName].filter(Boolean).join(" ");
 
-  const idNumber = makeNationalId(spec.code, rng);
+  /*
+   * Several national ID schemes encode the birth date and sex inside the number
+   * itself (CN, KR, SE, NO, PL, ZA, MX, AE). Passing them in keeps the document
+   * consistent with the rest of the record; without this the ID contradicted
+   * the profile it belonged to.
+   *
+   * The Chinese scheme also needs a GB/T 2260 province prefix, which is derived
+   * from the same division the address uses, so the two agree.
+   */
+  const cnPrefix = spec.code === "CN" ? CN_GB2260_PREFIX[division.code] : undefined;
+  const idNumber = makeNationalId(spec.code, rng, {
+    birthDate,
+    gender,
+    // Province-level GB/T 2260 code, e.g. 500000 for Chongqing, 440000 for
+    // Guangdong. Using the province form rather than a guessed city/county tail
+    // keeps the code one that genuinely exists.
+    regionCode: cnPrefix ? `${cnPrefix}0000` : undefined,
+  });
 
   /* ---- address ---- */
   const streetNumber = rng.int(1, 9899);
@@ -459,12 +494,32 @@ export function generateIdentity(
     .join("\n");
 
   /* ---- contact ---- */
-  const localPart =
-    firstName.toLowerCase().replace(/[^a-z]/g, "") +
-    "." +
-    lastName.toLowerCase().replace(/[^a-z]/g, "") +
-    rng.int(1, 99);
-  const email = `${localPart || "user"}@${rng.pick(EMAIL_DOMAINS)}`;
+  /*
+   * The local-part must be valid ASCII. Stripping everything outside [a-z] from
+   * a Chinese, Japanese or Korean name leaves an empty string, which produced
+   * addresses like ".42@yahoo.com" — syntactically invalid, not merely odd.
+   *
+   * CJK name pools hold no romanized form to fall back on, so when neither name
+   * yields ASCII the local-part is built from a stable word list seeded by the
+   * record. That keeps the address plausible and reproducible instead of empty.
+   */
+  const ascii = (s: string) => s.toLowerCase().normalize("NFD").replace(/[^a-z0-9]/g, "");
+  const firstAscii = ascii(firstName);
+  const lastAscii = ascii(lastName);
+
+  let localPart = [firstAscii, lastAscii].filter(Boolean).join(".");
+  if (!localPart) {
+    // Deterministic from the seed, so the same record always gets the same mail.
+    const words = [
+      "aurora", "bluebird", "cedar", "delta", "ember", "flint", "harbor",
+      "ivory", "juniper", "kestrel", "lumen", "meadow", "nimbus", "onyx",
+      "pebble", "quartz", "river", "sable", "timber", "umber", "willow",
+    ];
+    localPart = `${rng.pick(words)}.${rng.pick(words)}`;
+  }
+  localPart = `${localPart}${rng.int(1, 99)}`;
+
+  const email = `${localPart}@${rng.pick(EMAIL_DOMAINS)}`;
 
   /* ---- personal ---- */
   const heightRange = spec.heightCm[gender];
