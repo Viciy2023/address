@@ -4,8 +4,33 @@ import svelte from "@astrojs/svelte";
 import sitemap from "@astrojs/sitemap";
 import tailwindcss from "@tailwindcss/vite";
 
-import { SITE_URL } from "./src/config.ts";
+import { SITE_URL, SITE_URL_AUTO, ON_PAGES } from "./src/config.ts";
 import { ROUTES, matchCountryPath } from "./src/routes.ts";
+
+/**
+ * Warns when a Cloudflare Pages build is relying on the platform-provided URL.
+ *
+ * `CF_PAGES_URL` is the per-deployment host (`<hash>.<project>.pages.dev`), so
+ * a site built this way gets canonical URLs that change on every deployment.
+ * Google then has no stable canonical to settle on. The site still works — the
+ * fallback exists so a misconfigured build is not broken — but production
+ * should set SITE_URL to the stable origin.
+ */
+if (ON_PAGES && SITE_URL_AUTO) {
+  console.warn(
+    [
+      "",
+      "  ⚠  Building on Cloudflare Pages without SITE_URL.",
+      `     Falling back to the per-deployment URL: ${SITE_URL}`,
+      "     Canonical URLs will change on every deploy, which prevents search",
+      "     engines from settling on a canonical address.",
+      "",
+      "     Set SITE_URL to the project's stable domain, e.g.:",
+      "       Settings → Environment variables → SITE_URL = https://<project>.pages.dev",
+      "",
+    ].join("\n"),
+  );
+}
 
 /**
  * Maps a built URL back to the priority and changefreq declared in

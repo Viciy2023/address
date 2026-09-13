@@ -47,36 +47,42 @@ npm run dev               # http://localhost:4321
 
 ### Environment
 
-On Cloudflare Pages you configure **nothing**. Pages injects `CF_PAGES_URL`
-into every build — the exact URL that deployment will be served at — and the
-site reads it to build all absolute URLs. The canonical tags, sitemap and
-`robots.txt` therefore match the live domain automatically, including the
-`<project>.pages.dev` default.
-
-The origin is resolved in this order:
+The origin is resolved at build time, in this order:
 
 | Order | Source | When it applies |
 | --- | --- | --- |
-| 1 | `SITE_URL` | Explicit override: a custom domain, a local build, or a host that does not announce its own URL |
-| 2 | `CF_PAGES_URL` | Cloudflare Pages builds — chosen automatically |
+| 1 | `SITE_URL` | **Production.** The stable public origin |
+| 2 | `CF_PAGES_URL` | Fallback on Cloudflare Pages — but it is the *per-deployment* host, so canonical URLs would change every deploy. A warning is printed when this path is taken |
 | 3 | `http://localhost:4321` | Development default |
+
+`SITE_URL` therefore **is** set on Cloudflare Pages, to the project's stable
+domain (`https://address-6bo.pages.dev`). It is the only place the domain
+appears; nothing is hard-coded in the source.
 
 | Variable | Required | Effect when set | Effect when empty |
 | --- | --- | --- | --- |
-| `SITE_URL` | no | Overrides the detected origin | The origin comes from `CF_PAGES_URL`, or localhost |
+| `SITE_URL` | production: yes | Stable origin for canonical, hreflang, og:image, sitemap | Falls back to `CF_PAGES_URL`, then localhost |
 | `ADSENSE_CLIENT` | no | Loads AdSense, shows the consent banner, emits `ads.txt` | No ads, no banner; privacy policy states no third-party services are used |
 | `CF_ANALYTICS_TOKEN` | no | Loads Cloudflare Web Analytics (cookieless) | No analytics |
 
 The privacy policy is generated from these flags rather than hand-written, so
 it cannot claim a service the site does not use.
 
+#### Why absolute URLs
+
+`hreflang`, `og:image` and sitemap `<loc>` are required by their specifications
+to be absolute, and Google advises against a relative `canonical`. Since the
+HTML is prerendered and Cloudflare Pages serves it verbatim, the origin must be
+known when the build runs. The design goal is therefore **zero hard-coded
+domains in the source** — not relative URLs in the output.
+
 #### Preview deployments
 
 Cloudflare Pages serves every non-production branch and pull request from its
-own URL (`<hash>.<project>.pages.dev`) running the same build. To stop a
-preview copy from being indexed in place of the real site, builds whose
-`CF_PAGES_BRANCH` is not the production branch emit `noindex, nofollow` and a
-`Disallow: /` robots.txt. No configuration is required.
+own URL running the same build. To stop a preview copy from being indexed in
+place of the real site, builds whose `CF_PAGES_BRANCH` is not the production
+branch emit `noindex, nofollow` and a `Disallow: /` robots.txt. No configuration
+is required.
 
 ## Deployment
 

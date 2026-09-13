@@ -35,13 +35,42 @@ function readEnv(name: string): string | undefined {
   return value ? String(value).trim() : undefined;
 }
 
-const raw = readEnv("SITE_URL") ?? readEnv("CF_PAGES_URL") ?? "http://localhost:4321";
+/**
+ * Resolves the public origin.
+ *
+ * Order, and why:
+ *
+ *   1. `SITE_URL` — an explicit, stable origin. **This is what production
+ *      should use.** Set it in the Pages project's environment variables.
+ *   2. `CF_PAGES_URL` — injected by Cloudflare Pages. It points at *this
+ *      deployment*, which on Cloudflare is the per-deployment host
+ *      (`<hash>.<project>.pages.dev`), not the stable `<project>.pages.dev`.
+ *      Using it alone would mean the canonical URL changes on every deploy,
+ *      which stops Google settling on a canonical at all. It is kept as a
+ *      fallback so a Pages build still produces a working site rather than
+ *      localhost URLs, but production must set SITE_URL.
+ *   3. localhost — development.
+ */
+const explicit = readEnv("SITE_URL");
+const cfUrl = readEnv("CF_PAGES_URL");
+const raw = explicit ?? cfUrl ?? "http://localhost:4321";
 
 /** Normalised origin with no trailing slash, e.g. "https://example.com". */
 export const SITE_URL = raw.replace(/\/+$/, "");
 
-/** True when the origin came from the hosting platform, not from SITE_URL. */
-export const SITE_URL_AUTO = !readEnv("SITE_URL") && Boolean(readEnv("CF_PAGES_URL"));
+/**
+ * True when the origin came from the platform rather than from SITE_URL.
+ *
+ * On Cloudflare this means the canonical is a per-deployment host and will
+ * change on the next deploy. Surfaced so the build can warn about it.
+ */
+export const SITE_URL_AUTO = !explicit && Boolean(cfUrl);
+
+/**
+ * True when running inside a Cloudflare Pages build.
+ * `CF_PAGES` is set to "1" by the build image.
+ */
+export const ON_PAGES = Boolean(readEnv("CF_PAGES"));
 
 /**
  * Preview deployments must not be indexed.
