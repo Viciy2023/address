@@ -102,13 +102,47 @@ if (cssGzip > LIMITS.initialCssGzip) {
   );
 }
 
+/* ----------------------------------------------------- page coverage */
+
+/**
+ * Every country in the registry must have a landing page in every language,
+ * and every one of those must appear in the sitemap. This is the regression
+ * that matters most here: a country silently dropped from routing still builds
+ * green and still passes the generator tests, but quietly loses its page.
+ */
+const registrySrc = fs.readFileSync(path.join(ROOT, "src", "lib", "registry.ts"), "utf8");
+const countryCodes = [...registrySrc.matchAll(/^\s{4}code: "([A-Z]{2})",$/gm)].map((m) => m[1]);
+const LANGS = ["zh", "en", "ja", "ko"];
+
+const sitemapPath = path.join(DIST, "sitemap-0.xml");
+const sitemap = fs.existsSync(sitemapPath) ? fs.readFileSync(sitemapPath, "utf8") : "";
+
+const missingPages = [];
+for (const code of countryCodes) {
+  for (const lang of LANGS) {
+    const prefix = lang === "zh" ? "" : `${lang}/`;
+    const rel = path.join(prefix, "countries", code.toLowerCase(), "index.html");
+    if (!fs.existsSync(path.join(DIST, rel))) {
+      missingPages.push(rel);
+    }
+    if (!sitemap.includes(`/countries/${code.toLowerCase()}/`)) {
+      missingPages.push(`sitemap missing /countries/${code.toLowerCase()}/`);
+    }
+  }
+}
+if (missingPages.length) {
+  failures.push(`country pages incomplete (${missingPages.length}):\n    ${[...new Set(missingPages)].slice(0, 10).join("\n    ")}`);
+}
+
 /* --------------------------------------------------------------- report */
 
 const totalRaw = files.reduce((n, f) => n + fs.statSync(f).size, 0);
 const lazyChunks = files.filter((f) => f.endsWith(".js") && !referenced(".js").some((u) => f.endsWith(u.replace(/^\//, "")))).length;
+const htmlCount = files.filter((f) => f.endsWith(".html")).length;
 
 console.log("build budget");
 console.log(`  files            ${String(files.length).padStart(6)} / ${LIMITS.files}`);
+console.log(`  html pages       ${String(htmlCount).padStart(6)} (${countryCodes.length} countries x ${LANGS.length} languages + fixed)`);
 console.log(`  total raw        ${(totalRaw / 1024 / 1024).toFixed(2).padStart(6)} MB`);
 console.log(`  initial JS       ${(jsGzip / 1024).toFixed(1).padStart(6)} KB gzip / ${(LIMITS.initialJsGzip / 1024).toFixed(0)} KB`);
 console.log(`  initial CSS      ${(cssGzip / 1024).toFixed(1).padStart(6)} KB gzip / ${(LIMITS.initialCssGzip / 1024).toFixed(0)} KB`);

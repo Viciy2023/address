@@ -5,6 +5,26 @@ import sitemap from "@astrojs/sitemap";
 import tailwindcss from "@tailwindcss/vite";
 
 import { SITE_URL } from "./src/config.ts";
+import { ROUTES, matchCountryPath } from "./src/routes.ts";
+
+/**
+ * Maps a built URL back to the priority and changefreq declared in
+ * `src/routes.ts`, so those fields are the single source of truth rather than
+ * duplicated here. Country landing pages get a mid priority: worth indexing,
+ * but below the generator itself.
+ */
+function routeMeta(pathname) {
+  // Strip the language prefix and trailing slash to get the language-relative path.
+  const withoutLang = pathname.replace(/^\/(en|ja|ko)(?=\/|$)/, "");
+  const rel = withoutLang.replace(/^\/+|\/+$/g, "");
+
+  const match = ROUTES.find((r) => r.path === rel);
+  if (match) return { priority: match.priority, changefreq: match.changefreq };
+
+  if (matchCountryPath(rel)) return { priority: 0.6, changefreq: "monthly" };
+
+  return { priority: 0.5, changefreq: "monthly" };
+}
 
 /**
  * Astro is configured for a fully static build so the same `dist/` can be
@@ -33,8 +53,10 @@ export default defineConfig({
         defaultLocale: "zh",
         locales: { zh: "zh-CN", en: "en", ja: "ja", ko: "ko" },
       },
-      changefreq: "weekly",
-      priority: 0.7,
+      serialize(item) {
+        const { priority, changefreq } = routeMeta(new URL(item.url).pathname);
+        return { ...item, priority, changefreq };
+      },
     }),
   ],
   vite: {

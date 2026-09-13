@@ -1,0 +1,359 @@
+---
+/**
+ * Country landing page.
+ *
+ * One page per country per language. The purpose is threefold:
+ *
+ *   1. Real content. A single-page generator gives crawlers one URL to index.
+ *      A page per country means "Canada address generator", "UK postcode
+ *      format" and similar queries have a destination that actually answers
+ *      them, with a worked example rather than filler.
+ *   2. Internal linking. Every country page links to the others and back to the
+ *      generator, which is what lets the set be crawled.
+ *   3. A scoped entry point. The generator on this page opens already set to
+ *      the country, so a visitor arriving for Canada does not have to hunt.
+ *
+ * The example record is generated at build time from the same engine the client
+ * uses, so it cannot drift from what the tool actually produces.
+ */
+import { COUNTRY_BY_CODE } from "../lib/registry";
+import { getCountrySummary } from "../lib/data";
+import { buildCountrySample } from "../lib/sample";
+import { postalHint } from "../lib/generator/postal";
+import { COUNTRIES } from "../lib/registry";
+import { COUNTRY_PAGE } from "../country-content";
+import { localize, type SiteLang } from "../config";
+
+interface Props {
+  lang: SiteLang;
+  code: string;
+}
+const { lang, code } = Astro.props as Props;
+
+const c = COUNTRY_PAGE[lang];
+const spec = COUNTRY_BY_CODE[code];
+const summary = getCountrySummary(code);
+const sample = await buildCountrySample(code);
+
+const name = spec.name[lang];
+const idName = spec.id.name[lang];
+
+/** Substitutes the placeholders the copy uses. */
+const fill = (tpl: string) => tpl.replace(/\{name\}/g, name).replace(/\{id\}/g, idName);
+
+/** City counts come from the generated stats file. */
+const cityCounts: Record<string, number> = (await import("../data/city-counts.json")).default;
+
+const cityCount = cityCounts[code] ?? 0;
+const divisionCount = summary?.states.length ?? 0;
+
+/* The sample's address and contact fields, resolved to plain strings. */
+const addr = {
+  fullName: sample?.map.fullName ?? "",
+  gender: sample?.fields.find((f) => f.key === "gender")?.value ?? "",
+  birthDate: sample?.map.birthDate ?? "",
+  fullAddress: sample?.map.fullAddress ?? "",
+  postal: sample?.map.postal ?? "",
+  phone: sample?.map.phone ?? "",
+  idNumber: sample?.map.idNumber ?? "",
+  email: sample?.map.email ?? "",
+  username: sample?.map.username ?? "",
+};
+
+/** Fact rows, in display order. Empty postal is handled explicitly. */
+const facts: { label: string; value: string; hint?: string }[] = [
+  { label: c.lNationality, value: spec.nationality[lang] },
+  { label: c.lLanguage, value: spec.language[lang] },
+  { label: c.lCurrency, value: `${spec.currency} ${spec.currencyLabel[lang]}`.trim() },
+  { label: c.lPhone, value: `+${spec.phone.code}` },
+  {
+    label: c.lPostal,
+    value: spec.postalDisabled ? c.lPostalNone : postalHint(spec.postalStyle) || "—",
+    hint: spec.postalDisabled ? undefined : summary?.postalReal ? "GeoNames" : c.lPostalSynthetic,
+  },
+  { label: c.lId, value: idName },
+  { label: c.lIdFormat, value: spec.id.format },
+  {
+    label: c.lIdValid,
+    value: spec.id.hasRealChecksum ? c.lIdChecksumYes : c.lIdFormatOnly,
+  },
+  { label: c.lAdmin, value: spec.address.adminLabel[lang] },
+  { label: c.lDivisions, value: String(divisionCount) },
+  { label: c.lCities, value: String(cityCount) },
+];
+
+/* Sample rows: only those with values. */
+const sampleRows = [
+  { label: c.fFullName, value: addr.fullName },
+  { label: c.fGender, value: addr.gender },
+  { label: c.fBirthDate, value: addr.birthDate },
+  { label: c.fAddress, value: addr.fullAddress, block: true },
+  ...(spec.postalDisabled ? [] : [{ label: c.fPostal, value: addr.postal }]),
+  { label: c.fPhone, value: addr.phone },
+  { label: c.fNationalId, value: addr.idNumber },
+  { label: c.fEmail, value: addr.email },
+  { label: c.fUsername, value: addr.username },
+].filter((r) => r.value);
+
+/* Other countries, for internal linking. */
+const others = COUNTRIES.filter((o) => o.code !== code);
+---
+
+<article class="shell page">
+  <nav class="crumbs" aria-label={c.backToCountries}>
+    <a href={localize("/countries/", lang)}>{c.backToCountries}</a>
+  </nav>
+
+  <header class="page-head">
+    <h1>{fill(c.h1)}</h1>
+    <p class="page-intro">{fill(c.intro)}</p>
+  </header>
+
+  <section class="block" aria-labelledby="facts-h">
+    <h2 id="facts-h">{fill(c.factsHeading)}</h2>
+    <dl class="facts">
+      {facts.map((f) => (
+        <div class="fact">
+          <dt>{f.label}</dt>
+          <dd class="mono">{f.value}{f.hint && <span class="fact-hint"> · {f.hint}</span>}</dd>
+        </div>
+      ))}
+    </dl>
+  </section>
+
+  {sample && (
+    <section class="block" aria-labelledby="sample-h">
+      <h2 id="sample-h">{c.sampleHeading}</h2>
+      <dl class="sample">
+        {sampleRows.map((r) => (
+          <div class={r.block ? "row row-block" : "row"}>
+            <dt>{r.label}</dt>
+            <dd class="mono">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p class="note faint">{c.sampleNote}</p>
+    </section>
+  )}
+
+  <section class="block cta" aria-labelledby="gen-h">
+    <h2 id="gen-h">{fill(c.generatorHeading)}</h2>
+    <!-- The island is scoped to this country via initialCountry. -->
+    <a class="btn btn-primary" href={localize("/", lang) + `?c=${code}`}>
+      {fill(c.generatorHeading)}
+    </a>
+  </section>
+
+  <section class="block" aria-labelledby="others-h">
+    <h2 id="others-h">{c.otherHeading}</h2>
+    <ul class="other-grid">
+      {others.map((o) => (
+        <li>
+          <a href={localize(`/countries/${o.code.toLowerCase()}/`, lang)}>
+            <span class="oname">{o.name[lang]}</span>
+            <span class="ocode mono">{o.code}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </section>
+</article>
+
+<style>
+  .page {
+    max-width: 820px;
+    padding-block: 2.5rem 2rem;
+  }
+
+  .crumbs {
+    margin-bottom: 1.5rem;
+    font-size: 0.8125rem;
+  }
+
+  .crumbs a {
+    color: var(--text-muted);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .crumbs a:hover {
+    color: var(--text);
+  }
+
+  .page-head {
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2rem;
+  }
+
+  .page-head h1 {
+    font-size: clamp(1.75rem, 4.5vw, 2.5rem);
+    letter-spacing: -0.03em;
+    margin: 0 0 0.75rem;
+  }
+
+  .page-intro {
+    font-size: 1.0625rem;
+    color: var(--text-muted);
+    line-height: 1.75;
+    margin: 0;
+    max-width: 64ch;
+  }
+
+  .block {
+    margin-bottom: 3rem;
+  }
+
+  .block h2 {
+    font-size: 1.125rem;
+    margin: 0 0 1rem;
+  }
+
+  /* Fact table: definition-list grid, hairline rules. */
+  .facts {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    margin: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  @media (min-width: 560px) {
+    .facts {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .fact {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.875rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  @media (min-width: 560px) {
+    .fact:nth-child(odd) {
+      padding-right: 1.5rem;
+      border-right: 1px solid var(--border);
+    }
+    .fact:nth-child(even) {
+      padding-left: 1.5rem;
+    }
+  }
+
+  .fact dt {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+    font-weight: 600;
+  }
+
+  .fact dd {
+    margin: 0;
+    font-size: 0.9375rem;
+  }
+
+  .fact-hint {
+    font-size: 0.75rem;
+    color: var(--text-faint);
+  }
+
+  /* Sample record. */
+  .sample {
+    margin: 0;
+    border: 1px solid var(--border);
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 1fr;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .row:last-child {
+    border-bottom: 0;
+  }
+
+  @media (min-width: 560px) {
+    .row {
+      grid-template-columns: 180px 1fr;
+    }
+  }
+
+  .row dt {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 0.625rem 0.875rem;
+    background: var(--surface-2);
+    border-right: 1px solid var(--border);
+  }
+
+  .row dd {
+    margin: 0;
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    word-break: break-word;
+  }
+
+  .row-block dd {
+    white-space: pre-line;
+  }
+
+  .note {
+    font-size: 0.75rem;
+    margin: 0.75rem 0 0;
+    max-width: 72ch;
+  }
+
+  .cta .btn {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    min-height: 44px;
+    padding-inline: 1.5rem;
+  }
+
+  /* Other-country grid, matching the home page. */
+  .other-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--border);
+    border-left: 1px solid var(--border);
+  }
+
+  .other-grid a {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    text-decoration: none;
+    color: inherit;
+    transition: background-color 160ms ease;
+    min-height: 44px;
+  }
+
+  .other-grid a:hover {
+    background: var(--surface-2);
+  }
+
+  .oname {
+    font-size: 0.875rem;
+  }
+
+  .ocode {
+    font-size: 0.6875rem;
+    color: var(--text-faint);
+  }
+</style>

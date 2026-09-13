@@ -26,8 +26,14 @@
   export let s: Strings;
   /** Country codes with bundled data, computed at build time. */
   export let available: string[];
+  /**
+   * Country to preselect. Set on country landing pages so the generator opens
+   * already scoped to that country; undefined on the home page, which defaults
+   * to US. A `?c=` in the URL still wins, so shared links reproduce.
+   */
+  export let initialCountry: string | undefined = undefined;
 
-  let country = "US";
+  let country = initialCountry && available.includes(initialCountry) ? initialCountry : "US";
   let division = "";
   let gender: "any" | "male" | "female" = "any";
   let identity: Identity | null = null;

@@ -6,7 +6,7 @@
  */
 import { COUNTRY_BY_CODE, COUNTRIES } from "../lib/registry";
 import { getCountrySummary } from "../lib/data";
-import type { SiteLang } from "../config";
+import { localize, type SiteLang } from "../config";
 import { t } from "../i18n/strings";
 
 interface Props {
@@ -71,7 +71,9 @@ const note =
       <tbody>
         {rows.map((r) => (
           <tr id={r.code.toLowerCase()}>
-            <th scope="row">{r.name}</th>
+            <th scope="row">
+              <a href={localize(`/countries/${r.code.toLowerCase()}/`, lang)}>{r.name}</a>
+            </th>
             <td class="mono">{r.code}</td>
             <td class="num">{r.divisions}</td>
             <td class="num">{cityCounts[r.code] ?? 0}</td>

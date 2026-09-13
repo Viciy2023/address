@@ -144,12 +144,20 @@ function synthetic(shape: Shape, rng: Rng): string {
   return `${headStr}${shape.sep ?? ""}${renderMask(shape.tail, rng)}`;
 }
 
-/** Human-readable format description, shown as a field hint. */
+/**
+ * Human-readable format mask for a postal style, e.g. "#####" for the US or
+ * "… #AA" for the UK. `#` is a digit, `A` a letter, `…` the part carried over
+ * verbatim from real data.
+ *
+ * The mask characters are kept rather than substituted with sample digits: a
+ * rendered "00000" reads as a real postal code, whereas "#####" reads as the
+ * pattern it actually is.
+ */
 export function postalHint(style: PostalStyle): string {
   const shape = SHAPES[style];
   if (!shape) return "";
-  const headMask = shape.head === "all" ? "…" : "#".repeat(shape.head);
-  return `${headMask}${shape.sep ?? ""}${shape.tail}`.replace(/#/g, "0").replace(/A/g, "A");
+  const head = shape.head === "all" ? "…" : "#".repeat(shape.head);
+  return `${head}${shape.sep ?? ""}${shape.tail}`;
 }
 
 export { SHAPES };

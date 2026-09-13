@@ -28,7 +28,7 @@ jobs:
       # Guards against encoding corruption and stale generated data. Both have
       # silently broken this project before.
       - name: Repository hygiene
-        run: node scripts/check-repo.mjs
+        run: npm run hygiene
 
       - name: Astro and TypeScript check
         run: npm run check
@@ -43,8 +43,12 @@ jobs:
         env:
           SITE_URL: https://example.com
 
-      - name: Check for broken internal links
-        run: npx linkinator dist --silent --skip "^https?://"
+      # Every internal link must resolve to a built file, and every #anchor to
+      # an id on the target page. Offline and deterministic.
+      - name: Check internal links
+        run: npm run links
 
-      - name: Check output size budget
-        run: node scripts/check-budget.mjs
+      # Enforces the Cloudflare Pages file cap and the initial-JS budget, and
+      # fails if any country loses its landing page or sitemap entry.
+      - name: Check build budget and page coverage
+        run: npm run budget

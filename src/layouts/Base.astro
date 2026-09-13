@@ -223,6 +223,10 @@ const ogImage = `${SITE.url}/og.png`;
     text-decoration: none;
     color: inherit;
     flex-shrink: 0;
+    /* The header is 62px tall; make the whole height clickable rather than
+       just the 30px the logo and text occupy. */
+    min-height: 44px;
+    padding-block: 0.5rem;
   }
 
   .brand-mark {

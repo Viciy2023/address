@@ -266,34 +266,7 @@ function pickPostalExamples(postal, divisionName, cityNames) {
   return out.size ? [...out] : null;
 }
 
-/** Leading characters a postal code keeps; digits and letters are randomised after. */
-function keepOffset(example, style) {
-  switch (style) {
-    case "gb": {
-      const sp = example.indexOf(" ");
-      return sp > 0 ? sp : Math.max(2, example.length - 3);
-    }
-    case "ca": {
-      const sp = example.indexOf(" ");
-      return sp > 0 ? sp : 3;
-    }
-    case "nl": {
-      const sp = example.indexOf(" ");
-      return sp > 0 ? sp : 4;
-    }
-    case "br": {
-      const dash = example.indexOf("-");
-      return dash > 0 ? Math.max(2, dash - 1) : 2;
-    }
-    case "numeric3plus": {
-      const dash = example.indexOf("-");
-      return dash > 0 ? Math.max(1, dash - 1) : 2;
-    }
-    default:
-      return Math.min(3, Math.max(0, example.length - 2));
-  }
-}
-
+/** Format-correct placeholder used when a division has no recorded postal codes. */
 function syntheticPostal(style, seed) {
   const d = (i) => String((seed >> (i * 3)) % 10);
   const L = (i) => "ABCDEFGHJKLMNPRSTUVWXYZ"[(seed >> (i * 2)) % 21];

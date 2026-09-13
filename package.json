@@ -10,10 +10,12 @@
     "build": "astro build",
     "preview": "astro preview",
     "check": "astro check && tsc --noEmit",
-    "data": "node scripts/build-data.mjs && node scripts/build-names.mjs && node scripts/build-index.mjs",
+    "data": "node scripts/build-data.mjs && node scripts/build-names.mjs && node scripts/build-index.mjs && node scripts/build-og.mjs",
     "test": "tsx scripts/smoke-test.ts",
-    "links": "linkinator dist --silent --skip \"^https?://\"",
-    "verify": "npm run check && npm run build && npm run test"
+    "links": "node scripts/check-links.mjs",
+    "budget": "node scripts/check-budget.mjs",
+    "hygiene": "node scripts/check-repo.mjs",
+    "verify": "npm run hygiene && npm run check && npm run test && npm run build && npm run links && npm run budget"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.4",
@@ -27,7 +29,6 @@
     "@astrojs/check": "^0.9.10",
     "@faker-js/faker": "^10.6.0",
     "@tailwindcss/typography": "^0.5.19",
-    "linkinator": "^8.1.0",
     "sharp": "^0.35.4",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"

@@ -18,23 +18,39 @@ import Base from "../layouts/Base.astro";
 import HomeView from "../views/HomeView.astro";
 import ProsePage from "../views/ProsePage.astro";
 import CountriesView from "../views/CountriesView.astro";
+import CountryView from "../views/CountryView.astro";
 import CreditsView from "../views/CreditsView.astro";
-import { ROUTES, type RouteDef } from "../routes";
+import { ROUTES, countryPath, type RouteDef } from "../routes";
 import { LANGS, SITE, type SiteLang, absolute } from "../config";
 import { t } from "../i18n/strings";
 import { ABOUT, CONTACT, TERMS, type PageCopy } from "../content";
+import { COUNTRY_PAGE } from "../country-content";
 import { buildPrivacy } from "../privacy";
 import { availableCountries, totalCityCount, totalDivisionCount } from "../lib/data";
+import { COUNTRIES, COUNTRY_BY_CODE } from "../lib/registry";
 
 interface PathProps {
   lang: SiteLang;
   route: RouteDef;
+  /** Set only on country landing pages. */
+  country?: string;
 }
 
 export const getStaticPaths: GetStaticPaths = () => {
   const paths: { params: { path: string | undefined }; props: Record<string, unknown> }[] = [];
+
+  /* Country landing pages: one per country per language, generated from the
+     registry so the list can never drift from the countries that actually
+     have data. */
+  const countryRoutes: RouteDef[] = COUNTRIES.map((c) => ({
+    path: countryPath(c.code),
+    priority: 0.6,
+    changefreq: "monthly" as const,
+    index: true,
+  }));
+
   for (const lang of LANGS) {
-    for (const route of ROUTES) {
+    for (const route of [...ROUTES, ...countryRoutes]) {
       // Home sits at the language root: "" for zh, "en"/"ja"/"ko" otherwise.
       // Content pages are "<lang>/<page>" for the non-default languages.
       const param =
@@ -45,15 +61,20 @@ export const getStaticPaths: GetStaticPaths = () => {
           : lang === "zh"
             ? route.path
             : `${lang}/${route.path}`;
-      paths.push({ params: { path: param }, props: { lang, route } as unknown as Record<string, unknown> });
+      const country = /^countries\/([a-z]{2})$/i.exec(route.path)?.[1].toUpperCase();
+      paths.push({
+        params: { path: param },
+        props: { lang, route, ...(country ? { country } : {}) } as unknown as Record<string, unknown>,
+      });
     }
   }
   return paths;
 };
 
-const { lang, route } = Astro.props as unknown as PathProps;
+const { lang, route, country } = Astro.props as unknown as PathProps;
 const s = t(lang);
 const isHome = route.path === "";
+const isCountry = Boolean(country);
 
 const codes = availableCountries();
 
@@ -89,17 +110,30 @@ const COPY: Record<string, PageCopy> = {
 const copy: PageCopy | undefined = COPY[route.path];
 const pagePath = `/${route.path}/`;
 
+/* Country landing pages carry their own localized title and description. */
+const cc = COUNTRY_PAGE[lang];
+const cSpec = country ? COUNTRY_BY_CODE[country] : undefined;
+const cName = cSpec?.name[lang] ?? "";
+const countryTitle = cSpec ? `${cName} — ${SITE.product[lang]} | ${s.brand}` : "";
+const countryDescription = cSpec
+  ? cc.intro.replace(/\{name\}/g, cName).replace(/\{id\}/g, cSpec.id.name[lang]).slice(0, 300)
+  : "";
+
 const title = isHome
   ? homeTitle
-  : copy
-    ? `${copy.title} | ${s.brand}`
-    : route.path === "countries"
-      ? `${s.countriesTitle} | ${s.brand}`
-      : `${s.creditsTitle} | ${s.brand}`;
+  : isCountry
+    ? countryTitle
+    : copy
+      ? `${copy.title} | ${s.brand}`
+      : route.path === "countries"
+        ? `${s.countriesTitle} | ${s.brand}`
+        : `${s.creditsTitle} | ${s.brand}`;
 
 const description = isHome
   ? homeDescription
-  : (copy?.intro ?? (route.path === "countries" ? s.countriesSub : s.disclaimerBody));
+  : isCountry
+    ? countryDescription
+    : (copy?.intro ?? (route.path === "countries" ? s.countriesSub : s.disclaimerBody));
 
 /* -------------------------------------------------------- structured data */
 
@@ -177,10 +211,16 @@ const sectionTitles =
 const breadcrumb = {
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
-  itemListElement: [
-    { "@type": "ListItem", position: 1, name: s.brand, item: absolute("/", lang) },
-    { "@type": "ListItem", position: 2, name: title, item: absolute(pagePath, lang) },
-  ],
+  itemListElement: isCountry
+    ? [
+        { "@type": "ListItem", position: 1, name: s.brand, item: absolute("/", lang) },
+        { "@type": "ListItem", position: 2, name: s.countriesTitle, item: absolute("/countries/", lang) },
+        { "@type": "ListItem", position: 3, name: cName, item: absolute(pagePath, lang) },
+      ]
+    : [
+        { "@type": "ListItem", position: 1, name: s.brand, item: absolute("/", lang) },
+        { "@type": "ListItem", position: 2, name: title, item: absolute(pagePath, lang) },
+      ],
 };
 ---
 
@@ -193,6 +233,8 @@ const breadcrumb = {
 >
   {isHome ? (
     <HomeView {lang} {codes} {groupLabels} {faqItems} {sectionTitles} />
+  ) : isCountry && country ? (
+    <CountryView {lang} code={country} />
   ) : copy ? (
     <ProsePage {copy} email={SITE.email} />
   ) : route.path === "countries" ? (

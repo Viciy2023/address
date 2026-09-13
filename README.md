@@ -69,9 +69,10 @@ it cannot claim a service the site does not use.
 | `npm run check` | Astro + TypeScript checks (0 errors expected) |
 | `npm test` | Generator test suite — 81 checks |
 | `npm run data` | Regenerate country data from GeoNames and faker |
-| `npm run verify` | check + build + test |
-| `node scripts/check-repo.mjs` | Encoding and generated-data hygiene |
-| `node scripts/check-budget.mjs` | Output size and file-count budget |
+| `npm run verify` | Full gate: hygiene → check → test → build → links → budget |
+| `npm run hygiene` | Encoding and generated-data guard |
+| `npm run links` | Internal link and anchor checker |
+| `npm run budget` | Size, file-count and page-coverage budget |
 | `node scripts/build-og.mjs` | Regenerate the social share image |
 
 ## Architecture
@@ -81,11 +82,13 @@ src/
   config.ts              Site URL, languages, feature flags — the only domain source
   routes.ts              Route table; drives pages, sitemap and hreflang together
   content.ts             Prose copy (about, contact, terms) for all languages
+  country-content.ts     Country landing-page copy (four languages)
   privacy.ts             Privacy policy, generated from live config
   i18n/strings.ts        UI strings for zh / en / ja / ko
   lib/
     registry.ts          Country definitions: formats, pools, identifier specs
     data.ts              Data loading (eager index, lazy detail and name pools)
+    sample.ts            Build-time example record for country pages
     generator/
       rng.ts             Seeded PRNG — makes results reproducible
       postal.ts          Postal-code shapes per country
@@ -100,6 +103,14 @@ src/
   views/                 Page bodies
   pages/[...path].astro  Single route file for the whole site
 ```
+
+### Pages
+
+`src/routes.ts` plus the country registry drive **164 pages**: 28 fixed pages
+(7 routes × 4 languages) and **136 country landing pages** (34 countries × 4
+languages). Each country page carries a fact table, a worked example generated
+at build time by the same engine the client uses, and links to every other
+country — so the generator is not a single indexable URL.
 
 ### Two decisions worth knowing
 

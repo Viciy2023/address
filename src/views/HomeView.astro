@@ -47,7 +47,7 @@ const s = t(lang);
   <ul class="country-grid">
     {codes.map((code) => (
       <li>
-        <a href={localize("/countries/", lang) + "#" + code.toLowerCase()}>
+        <a href={localize(`/countries/${code.toLowerCase()}/`, lang)}>
           <span class="country-name">{COUNTRY_BY_CODE[code].name[lang]}</span>
           <span class="country-code mono">{code}</span>
         </a>
