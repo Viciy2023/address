@@ -11,7 +11,7 @@
  * generator.
  */
 
-import { COUNTRY_BY_CODE } from "./registry.js";
+import { COUNTRY_BY_CODE, type Lang } from "./registry.js";
 import { generateIdentity, type Identity } from "./generator/index.js";
 import { seedFromString } from "./generator/rng.js";
 import { loadCountryData, loadNamePool } from "./data.js";
@@ -23,7 +23,7 @@ import { loadCountryData, loadNamePool } from "./data.js";
  * sample block rather than render a broken one. Data loading is awaited here
  * because this runs at build time, not in the browser.
  */
-export async function buildCountrySample(code: string): Promise<Identity | null> {
+export async function buildCountrySample(code: string, lang?: Lang): Promise<Identity | null> {
   const spec = COUNTRY_BY_CODE[code.toUpperCase()];
   if (!spec) return null;
 
@@ -39,6 +39,7 @@ export async function buildCountrySample(code: string): Promise<Identity | null>
         country: spec.code,
         seed: seedFromString(`country-page-sample:${spec.code}`),
         gender: "any",
+        lang,
       },
     );
   } catch {

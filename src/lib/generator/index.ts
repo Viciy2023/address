@@ -95,6 +95,12 @@ export interface GenerateOptions {
   gender?: "male" | "female" | "any";
   division?: string | null;
   seed: number;
+  /**
+   * UI language, used to pick the localized administrative-division name.
+   * Without it a Chinese interface showed a Chinese address with an English
+   * province name, because GeoNames' ASCII table has no local names.
+   */
+  lang?: Lang;
 }
 
 /* ------------------------------------------------------------------ */
@@ -335,13 +341,39 @@ export function generateIdentity(
   const rng = new Rng(opts.seed);
   const { name, countryData } = deps;
 
+  /*
+   * Resolves a localized value for the active UI language. Every registry
+   * value (hair colour, degree, industry, …) is translated into all four
+   * languages; emitting `.en` unconditionally showed English values under
+   * Chinese, Japanese and Korean labels.
+   */
+  const L = opts.lang ?? "en";
+  const lv = (v: L10n): string => v[L];
+  const pickL = (arr: readonly L10n[]): string => lv(rng.pick(arr));
+
   /* ---- country-level context ---- */
   const division =
     (opts.division && countryData.states.find((s) => s.code === opts.division)) ||
     rng.pick(countryData.states);
 
+  /*
+   * The CJK address templates are "{state}{city}{street}" with no separator, so
+   * the division name is concatenated directly onto the city. Emitting
+   * GeoNames' ASCII name there produced addresses like "Chongqing渝中区…",
+   * which is not a cosmetic issue — the string is malformed. The localized name
+   * is therefore required for those languages, not merely preferred.
+   */
+  const divisionName = (opts.lang && division.nameL10n?.[opts.lang]) || division.name;
+
   const city = division.cities.length ? rng.pick(division.cities) : null;
-  const cityName = city?.n ?? division.name;
+  /*
+   * The city name follows the same rule as the division name. For CJK address
+   * templates the value is concatenated onto the street line with no separator,
+   * so an ASCII city there produces "JiangxiJinfeng9471 Lake Dr" — a malformed
+   * string, not merely an untranslated one.
+   */
+  const cityName =
+    (opts.lang && city?.nL10n?.[opts.lang]) || city?.n || divisionName;
 
   const postal = makePostal(division.postal, countryData.postalStyle, rng);
 
@@ -374,13 +406,31 @@ export function generateIdentity(
 
   /* ---- address ---- */
   const streetNumber = rng.int(1, 9899);
-  const streetNames = [
+  const streetNames = spec.address.streets ?? [
     "Main", "Oak", "Park", "Elm", "Maple", "Cedar", "Pine", "Lake", "Hill",
     "Walnut", "Sunset", "Church", "Market", "Highland", "Victoria", "Station",
     "Kings", "Queens", "Mill", "School",
   ];
-  const streetSuffix = ["St", "Ave", "Rd", "Dr", "Ln", "Blvd", "Way", "Ct"];
-  const street = `${streetNumber} ${rng.pick(streetNames)} ${rng.pick(streetSuffix)}`;
+  const streetSuffixes = spec.address.streetSuffixes ?? ["St", "Ave", "Rd", "Dr", "Ln", "Blvd", "Way", "Ct"];
+  /*
+   * The street pool is written as name + suffix pairs that read as one word in
+   * CJK addresses (中山路, 本町通り), so they are joined without a space. Latin
+   * streets keep the space ("Main St").
+   */
+  const useLocalStreets = Boolean(spec.address.streets);
+  const baseStreet = useLocalStreets
+    ? `${rng.pick(streetNames)}${rng.pick(streetSuffixes)}`
+    : `${rng.pick(streetNames)} ${rng.pick(streetSuffixes)}`;
+
+  /*
+   * Number placement is locale-specific. Latin addresses lead with the house
+   * number ("120 Oak St"); the CJK countries here put it last. The suffix is
+   * not universal either — China uses 号, Japan uses 番地, Korea uses 번지 —
+   * so it comes from the country's own address spec rather than a literal.
+   */
+  const street = useLocalStreets
+    ? `${baseStreet}${streetNumber}${spec.address.houseSuffix ?? ""}`
+    : `${streetNumber} ${baseStreet}`;
 
   const phoneNational = rng.digits(spec.phone.nationalDigits);
   const grouped: string[] = [];
@@ -392,15 +442,17 @@ export function generateIdentity(
   if (cursor < phoneNational.length) grouped.push(phoneNational.slice(cursor));
   const phone = `+${spec.phone.code} ${grouped.join(" ")}`.trim();
 
-  // Address lines follow the country's own ordering.
+  // Address lines follow the country's own ordering. The country name is
+  // localized too: a Chinese address ending in "China" is inconsistent.
+  const countryName = (opts.lang && spec.name[opts.lang]) || spec.name.en;
   const addressLines = spec.address.template.map((line) =>
     line
       .replace("{street}", street)
       .replace("{city}", cityName)
       .replace("{stateCode}", division.code)
-      .replace("{state}", division.name)
+      .replace("{state}", divisionName)
       .replace("{postal}", postal.value)
-      .replace("{country}", spec.name.en),
+      .replace("{country}", countryName),
   );
   const fullAddress = addressLines
     .filter((l) => l.replace(/[\s,]/g, "").length > 0)
@@ -482,9 +534,9 @@ export function generateIdentity(
 
   /* ---- social ---- */
   const socialBio = rng.pick([
-    `${jobTitle} · ${industry.en}`,
-    `${major?.en ?? "Curious"} graduate · ${cityName}`,
-    `Building things in ${division.name}`,
+    `${jobTitle} · ${lv(industry)}`,
+    `${major ? lv(major) : "Curious"} graduate · ${cityName}`,
+    `Building things in ${divisionName}`,
   ]);
 
   /* ---- assemble ---- */
@@ -494,22 +546,22 @@ export function generateIdentity(
     { key: "middleName", group: "identity", label: l10n("中间名", "Middle Name", "ミドルネーム", "중간 이름"), value: middleName || "—" },
     { key: "lastName", group: "identity", label: l10n("姓", "Last Name", "姓", "성"), value: lastName },
     { key: "fullName", group: "identity", label: l10n("全名", "Full Name", "氏名", "전체 이름"), value: fullName },
-    { key: "gender", group: "identity", label: l10n("性别", "Gender", "性別", "성별"), value: genderLabel(gender).en },
+    { key: "gender", group: "identity", label: l10n("性别", "Gender", "性別", "성별"), value: lv(genderLabel(gender)) },
     { key: "birthDate", group: "identity", label: l10n("出生日期", "Birth Date", "生年月日", "생년월일"), value: birthDate },
     { key: "age", group: "identity", label: l10n("年龄", "Age", "年齢", "나이"), value: String(age) },
-    { key: "nationality", group: "identity", label: l10n("国籍", "Nationality", "国籍", "국적"), value: spec.nationality.en },
-    { key: "language", group: "identity", label: l10n("语言", "Language", "言語", "언어"), value: spec.language.en },
+    { key: "nationality", group: "identity", label: l10n("国籍", "Nationality", "国籍", "국적"), value: lv(spec.nationality) },
+    { key: "language", group: "identity", label: l10n("语言", "Language", "言語", "언어"), value: lv(spec.language) },
     { key: "idNumber", group: "identity", label: spec.id.name, value: idNumber, sensitive: true, real: spec.id.hasRealChecksum },
 
     // address
     { key: "street", group: "address", label: l10n("街道地址", "Street Address", "住所", "도로명 주소"), value: street },
     { key: "city", group: "address", label: l10n("城市", "City", "市区町村", "도시"), value: cityName },
-    { key: "state", group: "address", label: spec.address.adminLabel, value: division.name },
+    { key: "state", group: "address", label: spec.address.adminLabel, value: divisionName },
     { key: "stateCode", group: "address", label: l10n("行政区代码", "Division Code", "行政コード", "행정구역 코드"), value: division.code },
     ...(spec.postalDisabled
       ? []
       : [{ key: "postal", group: "address" as GroupKey, label: l10n("邮政编码", "Postal Code", "郵便番号", "우편번호"), value: postal.value, real: postal.real }]),
-    { key: "country", group: "address", label: l10n("国家", "Country", "国", "국가"), value: spec.name.en },
+    { key: "country", group: "address", label: l10n("国家", "Country", "国", "국가"), value: lv(spec.name) },
     { key: "phone", group: "address", label: l10n("电话", "Phone", "電話", "전화"), value: phone },
     { key: "email", group: "address", label: l10n("电子邮箱", "Email", "メール", "이메일"), value: email },
     { key: "fullAddress", group: "address", label: l10n("完整地址", "Full Address", "完全な住所", "전체 주소"), value: fullAddress },
@@ -525,42 +577,42 @@ export function generateIdentity(
 
     // education
     { key: "school", group: "education", label: l10n("毕业院校", "School", "学校", "학교"), value: school },
-    { key: "major", group: "education", label: l10n("专业", "Major", "専攻", "전공"), value: major ? major.en : "—" },
-    { key: "degree", group: "education", label: l10n("学历", "Degree", "学位", "학위"), value: degree.en },
-    { key: "schoolType", group: "education", label: l10n("院校类型", "School Type", "学校種別", "학교 유형"), value: schoolType.en },
+    { key: "major", group: "education", label: l10n("专业", "Major", "専攻", "전공"), value: major ? lv(major) : "—" },
+    { key: "degree", group: "education", label: l10n("学历", "Degree", "学位", "학위"), value: lv(degree) },
+    { key: "schoolType", group: "education", label: l10n("院校类型", "School Type", "学校種別", "학교 유형"), value: lv(schoolType) },
 
     // employment
     { key: "jobTitle", group: "employment", label: l10n("职位", "Job Title", "職種", "직책"), value: jobTitle },
     { key: "company", group: "employment", label: l10n("公司", "Company", "会社", "회사"), value: company },
-    { key: "industry", group: "employment", label: l10n("行业", "Industry", "業界", "산업"), value: industry.en },
-    { key: "experience", group: "employment", label: l10n("经验", "Experience", "経験", "경력"), value: experience.en },
-    { key: "employmentType", group: "employment", label: l10n("雇佣类型", "Employment Type", "雇用形態", "고용 형태"), value: employment.en },
-    { key: "workMode", group: "employment", label: l10n("工作方式", "Work Mode", "勤務形態", "근무 방식"), value: workMode.en },
+    { key: "industry", group: "employment", label: l10n("行业", "Industry", "業界", "산업"), value: lv(industry) },
+    { key: "experience", group: "employment", label: l10n("经验", "Experience", "経験", "경력"), value: lv(experience) },
+    { key: "employmentType", group: "employment", label: l10n("雇佣类型", "Employment Type", "雇用形態", "고용 형태"), value: lv(employment) },
+    { key: "workMode", group: "employment", label: l10n("工作方式", "Work Mode", "勤務形態", "근무 방식"), value: lv(workMode) },
     { key: "income", group: "employment", label: l10n("收入等级", "Income Band", "収入帯", "소득 구간"), value: income },
-    { key: "companyType", group: "employment", label: l10n("公司类型", "Company Type", "会社種別", "회사 유형"), value: companyType.en },
+    { key: "companyType", group: "employment", label: l10n("公司类型", "Company Type", "会社種別", "회사 유형"), value: lv(companyType) },
     { key: "companySize", group: "employment", label: l10n("公司规模", "Company Size", "従業員数", "회사 규모"), value: companySize },
-    { key: "skills", group: "employment", label: l10n("技能", "Skills", "スキル", "기술"), value: skills.map((s) => s.en).join(", ") },
+    { key: "skills", group: "employment", label: l10n("技能", "Skills", "スキル", "기술"), value: skills.map((s) => s[L]).join(", ") },
 
     // lifestyle
-    { key: "traits", group: "lifestyle", label: l10n("人格特征", "Personality Traits", "性格特性", "성격 특성"), value: traits.map((t) => t.en).join(", ") },
-    { key: "relationship", group: "lifestyle", label: l10n("关系状态", "Relationship", "婚姻状況", "관계 상태"), value: relationship.en },
-    { key: "pet", group: "lifestyle", label: l10n("宠物", "Pet", "ペット", "반려동물"), value: pet.en },
-    { key: "foods", group: "lifestyle", label: l10n("偏好食物", "Favorite Foods", "好きな食べ物", "선호 음식"), value: foods.map((f) => f.en).join(", ") },
-    { key: "travel", group: "lifestyle", label: l10n("旅行风格", "Travel Style", "旅行スタイル", "여행 스타일"), value: travel.map((t) => t.en).join(", ") },
-    { key: "interests", group: "lifestyle", label: l10n("兴趣", "Interests", "興味", "관심사"), value: interests.map((i) => i.en).join(", ") },
+    { key: "traits", group: "lifestyle", label: l10n("人格特征", "Personality Traits", "性格特性", "성격 특성"), value: traits.map((t) => t[L]).join(", ") },
+    { key: "relationship", group: "lifestyle", label: l10n("关系状态", "Relationship", "婚姻状況", "관계 상태"), value: lv(relationship) },
+    { key: "pet", group: "lifestyle", label: l10n("宠物", "Pet", "ペット", "반려동물"), value: lv(pet) },
+    { key: "foods", group: "lifestyle", label: l10n("偏好食物", "Favorite Foods", "好きな食べ物", "선호 음식"), value: foods.map((f) => f[L]).join(", ") },
+    { key: "travel", group: "lifestyle", label: l10n("旅行风格", "Travel Style", "旅行スタイル", "여행 스타일"), value: travel.map((t) => t[L]).join(", ") },
+    { key: "interests", group: "lifestyle", label: l10n("兴趣", "Interests", "興味", "관심사"), value: interests.map((i) => i[L]).join(", ") },
 
     // personal
     { key: "height", group: "personal", label: l10n("身高", "Height", "身長", "키"), value: `${heightCm} cm`, alt: `${feet}'${inches}"` },
     { key: "weight", group: "personal", label: l10n("体重", "Weight", "体重", "몸무게"), value: `${weightKg} kg`, alt: `${weightLb} lb` },
-    { key: "hairColor", group: "personal", label: l10n("发色", "Hair Color", "髪の色", "머리색"), value: rng.pick(HAIR_COLORS).en },
-    { key: "eyeColor", group: "personal", label: l10n("瞳色", "Eye Color", "目の色", "눈동자 색"), value: rng.pick(EYE_COLORS).en },
-    { key: "skinTone", group: "personal", label: l10n("肤色", "Skin Tone", "肌の色", "피부톤"), value: rng.pick(SKIN_TONES).en },
-    { key: "bodyType", group: "personal", label: l10n("体型", "Body Type", "体型", "체형"), value: rng.pick(BODY_TYPES).en },
+    { key: "hairColor", group: "personal", label: l10n("发色", "Hair Color", "髪の色", "머리색"), value: pickL(HAIR_COLORS) },
+    { key: "eyeColor", group: "personal", label: l10n("瞳色", "Eye Color", "目の色", "눈동자 색"), value: pickL(EYE_COLORS) },
+    { key: "skinTone", group: "personal", label: l10n("肤色", "Skin Tone", "肌の色", "피부톤"), value: pickL(SKIN_TONES) },
+    { key: "bodyType", group: "personal", label: l10n("体型", "Body Type", "体型", "체형"), value: pickL(BODY_TYPES) },
     ...(bloodType
       ? [{ key: "bloodType", group: "personal" as GroupKey, label: l10n("血型", "Blood Type", "血液型", "혈액형"), value: bloodType }]
       : []),
     ...(ethnicity
-      ? [{ key: "ethnicity", group: "personal" as GroupKey, label: l10n("族裔", "Ethnicity", "民族", "민족"), value: ethnicity.en }]
+      ? [{ key: "ethnicity", group: "personal" as GroupKey, label: l10n("族裔", "Ethnicity", "民族", "민족"), value: lv(ethnicity) }]
       : []),
 
     // online
@@ -572,8 +624,8 @@ export function generateIdentity(
     { key: "timeZone", group: "online", label: l10n("时区", "Time Zone", "タイムゾーン", "시간대"), value: timeZone },
     { key: "ip", group: "online", label: l10n("IP 地址", "IP Address", "IPアドレス", "IP 주소"), value: ip },
     { key: "userAgent", group: "online", label: l10n("User Agent", "User Agent", "User Agent", "User Agent"), value: userAgent },
-    { key: "onlineStatus", group: "online", label: l10n("在线状态", "Online Status", "オンライン状態", "접속 상태"), value: status.en },
-    { key: "securityQuestion", group: "online", label: l10n("安全问题", "Security Question", "秘密の質問", "보안 질문"), value: securityQuestion.en },
+    { key: "onlineStatus", group: "online", label: l10n("在线状态", "Online Status", "オンライン状態", "접속 상태"), value: lv(status) },
+    { key: "securityQuestion", group: "online", label: l10n("安全问题", "Security Question", "秘密の質問", "보안 질문"), value: lv(securityQuestion) },
     { key: "securityAnswer", group: "online", label: l10n("安全答案", "Security Answer", "秘密の答え", "보안 답변"), value: securityAnswer },
     { key: "signature", group: "online", label: l10n("在线签名", "Bio Signature", "プロフィール文", "소개글"), value: signature },
 
@@ -602,7 +654,7 @@ export function generateIdentity(
       country: spec.name,
       birthDate,
       age,
-      gender: genderLabel(gender).en,
+      gender: lv(genderLabel(gender)),
     },
   };
 }

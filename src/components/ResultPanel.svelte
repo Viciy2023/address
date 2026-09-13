@@ -203,14 +203,7 @@
 
         <div class="fields">
           {#each g.fields as f (f.key)}
-            <button
-              class="field"
-              class:wide={isWide(f)}
-              class:copied={copiedKey === f.key}
-              title={s.copy}
-              aria-label="{s.copy}: {f.label[lang]}"
-              on:click={() => copyField(f.key, f.value)}
-            >
+            <div class="field" class:wide={isWide(f)} class:copied={copiedKey === f.key}>
               <span class="k">
                 {f.label[lang]}
                 {#if f.real === false}
@@ -219,7 +212,29 @@
               </span>
               <span class="v" class:sensitive={f.sensitive}>{f.value}</span>
               {#if f.alt}<span class="alt">{f.alt}</span>{/if}
-            </button>
+
+              <!-- Per-field copy. Visible on hover/focus, and always on touch
+                   devices where hover does not exist. -->
+              <button
+                class="copybtn"
+                title={s.copy}
+                aria-label="{s.copy}: {f.label[lang]}"
+                on:click={() => copyField(f.key, f.value)}
+              >
+                {#if copiedKey === f.key}
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                {:else}
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="9" y="9" width="12" height="12" rx="2.5" />
+                    <path d="M5 15V5.5A2.5 2.5 0 0 1 7.5 3H17" />
+                  </svg>
+                {/if}
+              </button>
+            </div>
           {/each}
         </div>
       </section>
@@ -269,7 +284,9 @@
     height: 72px;
     object-fit: cover;
     border: 1px solid var(--border);
+    border-radius: var(--radius-md);
     background: var(--surface-2);
+    box-shadow: var(--shadow-xs);
     display: block;
   }
 
@@ -318,27 +335,29 @@
     padding: 0.25rem 0.5rem;
     background: var(--surface-2);
     border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
   }
 
   /* ----------------------------------------------------------- action bar */
 
   .actionbar {
     position: sticky;
-    top: 0;
+    top: 0.5rem;
     z-index: 20;
-    background: color-mix(in srgb, var(--bg) 88%, transparent);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border-bottom: 1px solid var(--border);
-    margin-inline: -0.25rem;
-    padding-inline: 0.25rem;
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    padding-inline: 0.375rem;
   }
 
   .actionbar-inner {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
-    padding: 0.625rem 0;
+    padding: 0.4375rem 0;
   }
 
   /* -------------------------------------------------------- dense cards */
@@ -359,15 +378,17 @@
   .dense-head h3 {
     margin: 0;
     font-size: 0.9375rem;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.012em;
   }
 
   .dense-count {
     font-family: var(--font-mono);
     font-size: 0.6875rem;
-    color: var(--text-faint);
-    border: 1px solid var(--border-strong);
-    padding: 0.0625rem 0.375rem;
+    color: var(--text-muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 0.0625rem 0.5rem;
   }
 
   /* --------------------------------------------------------------- grid */
@@ -380,7 +401,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
     column-gap: 1.5rem;
-    padding: 0.25rem 1.25rem 0.875rem;
+    padding: 0.5rem 1.5rem 1rem;
   }
 
   @media (min-width: 1024px) {
@@ -389,25 +410,23 @@
     }
   }
 
-  /* Each field is its own copy button: the whole cell is the touch target. */
+  /* Each field is a grid cell: label above, value below, copy button at the
+     right edge. The button is always present so it works on touch, where
+     hover-only affordances are unreachable. */
   .field {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 0.125rem;
     min-width: 0;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid var(--border);
-    background: transparent;
-    border-inline: 0;
-    border-top: 0;
-    text-align: left;
-    cursor: pointer;
-    font: inherit;
-    color: inherit;
+    padding: 0.5rem 2.25rem 0.5rem 0.5rem;
+    margin-inline: -0.5rem;
+    border-radius: var(--radius-sm);
     transition: background-color 140ms ease;
   }
 
-  .field:hover {
+  .field:hover,
+  .field:focus-within {
     background: var(--surface-2);
   }
 
@@ -421,8 +440,8 @@
     align-items: center;
     gap: 0.375rem;
     font-size: 0.6875rem;
-    font-weight: 500;
-    letter-spacing: 0.045em;
+    font-weight: 600;
+    letter-spacing: 0.03em;
     text-transform: uppercase;
     color: var(--text-faint);
     min-width: 0;
@@ -449,19 +468,61 @@
     color: var(--text-faint);
   }
 
-  /* Copied confirmation, driven by the cell rather than a separate icon. */
+  /* ---------------------------------------------------------- copy button */
+
+  .copybtn {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    /* 44px hit area without occupying 44px of visual space. */
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--text-faint);
+    cursor: pointer;
+    /* Hidden until the cell is hovered or focused; shown whenever the pointer
+       cannot hover (touch), where it must be permanently visible. */
+    opacity: 0;
+    transition: opacity 140ms ease, color 140ms ease, background-color 140ms ease,
+      border-color 140ms ease;
+  }
+
+  .field:hover .copybtn,
+  .field:focus-within .copybtn {
+    opacity: 1;
+  }
+
+  .copybtn:hover {
+    color: var(--text);
+    background: var(--surface-3);
+    border-color: var(--border);
+  }
+
+  .copybtn:focus-visible {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    .copybtn {
+      opacity: 1;
+    }
+  }
+
+  /* Copied confirmation. */
   .field.copied {
     background: var(--accent-soft);
   }
 
-  .field.copied .k::before {
-    content: "";
-    width: 12px;
-    height: 12px;
-    flex-shrink: 0;
-    background: var(--accent);
-    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3.5' stroke-linecap='square'%3E%3Cpath d='M20 6L9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat;
-    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3.5' stroke-linecap='square'%3E%3Cpath d='M20 6L9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat;
+  .field.copied .copybtn {
+    opacity: 1;
+    color: var(--accent);
   }
 
   .hint {

@@ -74,6 +74,23 @@ export interface AddressSpec {
   template: string[];
   /** Label for the first-level administrative division. */
   adminLabel: LocalizedText;
+  /**
+   * Street-name pool for countries whose address line concatenates the parts
+   * with no separator (CN, JP, KR). Without it those addresses read
+   * "江西Jinfeng9471 Lake Dr 332098" — an English street name glued to a Chinese
+   * address, which is malformed rather than merely untranslated.
+   *
+   * Countries absent from this list use the shared streets below, which suit
+   * Latin-script addresses.
+   */
+  streets?: string[];
+  /** Suffix appended to the street name; used with `streets`. */
+  streetSuffixes?: string[];
+  /**
+   * Suffix for the house number when it follows the street (CJK order).
+   * CN 号, JP 番地, KR 번지.
+   */
+  houseSuffix?: string;
 }
 
 export interface CountrySpec {
@@ -885,11 +902,15 @@ export const COUNTRIES: CountrySpec[] = [
     postalStyle: "numeric6",
     postalDisabled: false,
     address: {
-      template: ["{state}{city}{street}", "{postal}", "{country}"],
-      adminLabel: L("省 / 直辖市", "Province", "省", "성"),
-    },
-    id: {
-      name: L("居民身份证号", "Resident ID Number", "住民身分証番号", "주민등록번호"),
+        template: ["{state}{city}{street}", "{postal}", "{country}"],
+        adminLabel: L("省 / 直辖市", "Province", "省", "성"),
+        // Chinese addresses put the road type after the name: 中山路.
+        streets: ["中山", "人民", "解放", "建设", "新华", "文化", "和平", "长江", "北京", "南京", "朝阳", "东风"],
+        streetSuffixes: ["路", "街", "大道", "巷"],
+        houseSuffix: "号",
+      },
+      id: {
+        name: L("居民身份证号", "Resident ID Number", "住民身分証番号", "주민등록번호"),
       format: "18 位数字",
       hasRealChecksum: true,
     },
@@ -1074,11 +1095,16 @@ export const COUNTRIES: CountrySpec[] = [
     postalStyle: "jp",
     postalDisabled: false,
     address: {
-      template: ["{postal}", "{state}{city}{street}", "{country}"],
-      adminLabel: L("都道府県", "Prefecture", "都道府県", "도도부현"),
-    },
-    id: {
-      name: L("个人编号 (マイナンバー)", "My Number", "マイナンバー", "마이넘버"),
+        template: ["{postal}", "{state}{city}{street}", "{country}"],
+        adminLabel: L("都道府県", "Prefecture", "都道府県", "도도부현"),
+        // Japanese addresses also suffix the road type; the block number is
+        // added by the generator.
+        streets: ["本町", "中央", "栄", "緑", "桜", "大手町", "旭", "若葉", "東", "西", "南", "北"],
+        streetSuffixes: ["通り", "丁目"],
+        houseSuffix: "番地",
+      },
+      id: {
+        name: L("个人编号 (マイナンバー)", "My Number", "マイナンバー", "마이넘버"),
       format: "12 桁",
       hasRealChecksum: true,
     },
@@ -1120,11 +1146,15 @@ export const COUNTRIES: CountrySpec[] = [
     postalStyle: "numeric5",
     postalDisabled: false,
     address: {
-      template: ["{state}{city}{street}", "{postal}", "{country}"],
-      adminLabel: L("道 / 广域市", "Province", "道 / 広域市", "도 / 광역시"),
-    },
-    id: {
-      name: L("居民登录号", "Resident Registration Number", "住民登録番号", "주민등록번호"),
+        template: ["{state}{city}{street}", "{postal}", "{country}"],
+        adminLabel: L("道 / 广域市", "Province", "道 / 広域市", "도 / 광역시"),
+        // Korean roads are named "…로" / "…길".
+        streets: ["테헤란", "강남대", "종로", "세종대", "을지", "충장", "중앙", "한강", "올림픽", "반포"],
+        streetSuffixes: ["로", "길"],
+        houseSuffix: "번지",
+      },
+      id: {
+        name: L("居民登录号", "Resident Registration Number", "住民登録番号", "주민등록번호"),
       format: "######-#######",
       hasRealChecksum: false,
     },

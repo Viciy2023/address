@@ -33,7 +33,7 @@ const { lang, code } = Astro.props as Props;
 const c = COUNTRY_PAGE[lang];
 const spec = COUNTRY_BY_CODE[code];
 const summary = getCountrySummary(code);
-const sample = await buildCountrySample(code);
+const sample = await buildCountrySample(code, lang);
 
 const name = spec.name[lang];
 const idName = spec.id.name[lang];

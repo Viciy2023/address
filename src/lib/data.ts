@@ -23,8 +23,10 @@ import type { PostalStyle } from "./registry.js";
 import INDEX from "../data/index.json";
 
 export interface CityEntry {
-  /** City name. */
+  /** ASCII name, always present. */
   n: string;
+  /** Localized name per UI language; null when it matches `n`. */
+  nL10n?: Record<string, string> | null;
   /** Population, used only for ordering. */
   pop: number;
   /** IANA time zone. */
@@ -34,6 +36,8 @@ export interface CityEntry {
 export interface DivisionEntry {
   code: string;
   name: string;
+  /** Localized name per UI language; falls back to `name` when missing. */
+  nameL10n?: Record<string, string>;
   /** Real postal codes recorded for this division (may be empty). */
   postal: string[];
   cities: CityEntry[];
@@ -50,6 +54,8 @@ export interface CountryData {
 export interface DivisionSummary {
   code: string;
   name: string;
+  /** Localized name per UI language; absent on older data. */
+  nameL10n?: Record<string, string>;
 }
 
 export interface CountrySummary {
@@ -82,10 +88,20 @@ export function getCountrySummary(code: string): CountrySummary | null {
   return COUNTRY_INDEX[code.toUpperCase()] ?? null;
 }
 
-/** Divisions for a country, for populating the selector. */
-export function getDivisions(code: string): DivisionSummary[] {
-  return (COUNTRY_INDEX[code.toUpperCase()]?.states ?? [])
-    .slice()
+/**
+ * Divisions for a country, for populating the selector.
+ *
+ * `lang` selects the localized name when the data carries one. Without it a
+ * Chinese interface listing China showed every province in GeoNames' ASCII
+ * spelling ("Chongqing" instead of 重庆), which reads as a broken translation.
+ */
+export function getDivisions(code: string, lang?: string): DivisionSummary[] {
+  const states = COUNTRY_INDEX[code.toUpperCase()]?.states ?? [];
+  return states
+    .map((s) => ({
+      code: s.code,
+      name: (lang && s.nameL10n?.[lang]) || s.name,
+    }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 

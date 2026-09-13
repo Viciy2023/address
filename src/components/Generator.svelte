@@ -47,8 +47,9 @@
   }));
 
   // Division options come from the eagerly-loaded index, so the selector is
-  // populated without waiting for the country's detail chunk.
-  $: divisions = getDivisions(country);
+  // populated without waiting for the country's detail chunk. `lang` picks the
+  // localized division name where GeoNames provides one.
+  $: divisions = getDivisions(country, lang);
 
   async function build(seed: number) {
     const spec = COUNTRY_BY_CODE[country];
@@ -70,6 +71,7 @@
         seed,
         gender,
         division: division || null,
+        lang,
       });
 
       /* Avatar: faker's personPortrait set is AI-generated fictional people,

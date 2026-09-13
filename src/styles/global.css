@@ -1,42 +1,47 @@
 @import "tailwindcss";
 
 /**
- * Design system: Minimalism & Swiss Style.
+ * Design system: Soft UI Evolution.
  *
- * Rationale: the page presents ~65 heterogeneous fields per record. Swiss
- * minimalism gives the dense content a calm, systematic frame — a strict grid,
- * generous whitespace *between* groups, and typographic hierarchy doing the
- * work that colour and chrome would otherwise do. It also hits WCAG AAA, which
- * a decorative style could not.
+ * Chosen over the earlier flat Swiss treatment because the content is a dense
+ * data grid, not an editorial page. Soft UI Evolution pairs rounded geometry
+ * (10–14px radii) with layered, low-contrast shadows: the surface hierarchy is
+ * legible without any single element shouting, which is what a page of 66
+ * near-identical values needs.
  *
  * Rules this file enforces:
- *   - One accent colour only. It marks the primary action and nothing else.
- *   - No shadows. Depth comes from hairline borders and whitespace.
- *   - Zero border-radius on structural elements; pills only for status.
- *   - All colours are semantic tokens, never raw hex in components.
- *   - Light and dark are defined together so contrast is verified in both.
+ *   - One accent colour, reserved for the primary action and identifiers.
+ *   - Depth comes from a small elevation scale, never from arbitrary shadows.
+ *   - All colours are semantic tokens; components never hardcode hex.
+ *   - Radii follow one scale so cards, inputs and buttons agree.
+ *   - Light and dark are defined together and contrast-checked in both.
+ *
+ * Typography note: the font is Inter, not a display face. Every string on the
+ * site is translated into Chinese, Japanese and Korean, so the type family must
+ * carry CJK glyphs — a rounded Latin display font would fall back to a
+ * mismatched system face for two thirds of the interface.
  */
 
 @theme {
   /* Neutral scale — does the heavy lifting. */
-  --color-ink-950: #0a0a0b;
-  --color-ink-900: #18181b;
-  --color-ink-800: #27272a;
-  --color-ink-700: #3f3f46;
-  --color-ink-600: #52525b;
-  --color-ink-500: #71717a;
-  --color-ink-400: #a1a1aa;
-  --color-ink-300: #d4d4d8;
-  --color-ink-200: #e4e4e7;
-  --color-ink-100: #f4f4f5;
-  --color-ink-50: #fafafa;
+  --color-ink-950: #0b0b0f;
+  --color-ink-900: #16161c;
+  --color-ink-800: #24242c;
+  --color-ink-700: #3a3a45;
+  --color-ink-600: #52525e;
+  --color-ink-500: #71717f;
+  --color-ink-400: #a1a1ad;
+  --color-ink-300: #d3d3db;
+  --color-ink-200: #e7e7ec;
+  --color-ink-100: #f2f2f6;
+  --color-ink-50: #f8f8fb;
 
-  /* Single accent: a restrained blue that clears 4.5:1 on white. */
-  --color-accent-700: #1d4ed8;
-  --color-accent-600: #2563eb;
-  --color-accent-500: #3b82f6;
-  --color-accent-100: #dbeafe;
-  --color-accent-50: #eff6ff;
+  /* Single accent: a restrained indigo that clears 4.5:1 on white. */
+  --color-accent-700: #3730a3;
+  --color-accent-600: #4f46e5;
+  --color-accent-500: #6366f1;
+  --color-accent-100: #e0e7ff;
+  --color-accent-50: #eef2ff;
 
   --color-danger-600: #dc2626;
   --color-danger-50: #fef2f2;
@@ -47,15 +52,22 @@
     "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", monospace;
 
-  /* Swiss grid: a 4px base with a deliberate jump for section rhythm. */
+  /* Radius scale. One set, used by every component. */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
   --spacing-section: 5rem;
 }
 
 @layer base {
   :root {
-    --bg: var(--color-ink-50);
+    --bg: #f6f7fb;
     --surface: #ffffff;
-    --surface-2: var(--color-ink-100);
+    --surface-2: var(--color-ink-50);
+    --surface-3: var(--color-ink-100);
     --text: var(--color-ink-900);
     --text-muted: var(--color-ink-600);
     --text-faint: var(--color-ink-500);
@@ -64,26 +76,43 @@
     --accent: var(--color-accent-600);
     --accent-hover: var(--color-accent-700);
     --accent-soft: var(--color-accent-50);
+    --accent-border: var(--color-accent-100);
     --on-accent: #ffffff;
     --focus: var(--color-accent-600);
+
+    /* Elevation scale. Soft UI Evolution: blur > offset, low alpha. */
+    --shadow-xs: 0 1px 2px rgba(16, 16, 28, 0.05);
+    --shadow-sm: 0 1px 3px rgba(16, 16, 28, 0.07), 0 1px 2px rgba(16, 16, 28, 0.04);
+    --shadow-md: 0 4px 12px rgba(16, 16, 28, 0.08), 0 1px 3px rgba(16, 16, 28, 0.04);
+    --shadow-lg: 0 12px 28px rgba(16, 16, 28, 0.1), 0 2px 6px rgba(16, 16, 28, 0.05);
+
     color-scheme: light;
   }
 
   .dark {
     /* Dark values are chosen for contrast independently, not inverted. */
-    --bg: var(--color-ink-950);
-    --surface: var(--color-ink-900);
-    --surface-2: var(--color-ink-800);
-    --text: var(--color-ink-50);
+    --bg: #0b0b0f;
+    --surface: #17171d;
+    --surface-2: #1e1e26;
+    --surface-3: #26262f;
+    --text: #f4f4f7;
     --text-muted: var(--color-ink-400);
-    --text-faint: var(--color-ink-500);
-    --border: var(--color-ink-800);
-    --border-strong: var(--color-ink-700);
+    --text-faint: #8b8b99;
+    --border: #2b2b35;
+    --border-strong: #3a3a45;
     --accent: var(--color-accent-500);
-    --accent-hover: var(--color-accent-500);
-    --accent-soft: #172554;
+    --accent-hover: #818cf8;
+    --accent-soft: #1e1b4b;
+    --accent-border: #312e81;
     --on-accent: #ffffff;
     --focus: var(--color-accent-500);
+
+    /* Dark elevation reads through lighter surfaces plus a deeper shadow. */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 14px 32px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+
     color-scheme: dark;
   }
 
@@ -110,17 +139,22 @@
   :focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
-    border-radius: 2px;
+    border-radius: var(--radius-sm);
   }
 
   ::selection {
-    background: var(--accent-soft);
+    background: var(--color-accent-100);
+    color: var(--color-accent-700);
+  }
+
+  .dark ::selection {
+    background: var(--accent-border);
     color: var(--text);
   }
 
   h1, h2, h3, h4 {
     font-weight: 600;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.021em;
     line-height: 1.2;
   }
 
@@ -149,7 +183,6 @@
     .shell { padding-inline: 2rem; }
   }
 
-  /* A hairline rule is the only separator the design uses. */
   .rule {
     border: 0;
     border-top: 1px solid var(--border);
@@ -166,27 +199,42 @@
     min-height: 44px;
     padding: 0.625rem 1.125rem;
     border: 1px solid transparent;
+    border-radius: var(--radius-md);
     font-size: 0.875rem;
     font-weight: 500;
     letter-spacing: -0.01em;
     cursor: pointer;
-    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+    transition: background-color 160ms ease, border-color 160ms ease,
+      color 160ms ease, box-shadow 160ms ease, transform 120ms ease;
     text-decoration: none;
     white-space: nowrap;
+  }
+
+  .btn:active:not(:disabled) {
+    /* Press feedback without moving neighbouring content. */
+    transform: translateY(1px);
   }
 
   .btn-primary {
     background: var(--accent);
     color: var(--on-accent);
+    box-shadow: var(--shadow-sm);
   }
-  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-primary:hover {
+    background: var(--accent-hover);
+    box-shadow: var(--shadow-md);
+  }
 
   .btn-secondary {
     background: var(--surface);
     color: var(--text);
     border-color: var(--border-strong);
+    box-shadow: var(--shadow-xs);
   }
-  .btn-secondary:hover { background: var(--surface-2); }
+  .btn-secondary:hover {
+    background: var(--surface-2);
+    border-color: var(--text-faint);
+  }
 
   .btn-ghost {
     background: transparent;
@@ -198,6 +246,7 @@
   .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    transform: none;
   }
 
   /* ---------------------------------------------------------------- inputs */
@@ -205,11 +254,10 @@
   .field-label {
     display: block;
     font-size: 0.75rem;
-    font-weight: 500;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.03em;
     color: var(--text-muted);
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4375rem;
   }
 
   .select,
@@ -220,25 +268,33 @@
     background: var(--surface);
     color: var(--text);
     border: 1px solid var(--border-strong);
-    border-radius: 0;
+    border-radius: var(--radius-md);
     font-size: 0.9375rem;
     font-family: inherit;
     appearance: none;
     cursor: pointer;
-    transition: border-color 160ms ease;
+    box-shadow: var(--shadow-xs);
+    transition: border-color 160ms ease, box-shadow 160ms ease;
   }
 
   .select:hover, .input:hover { border-color: var(--text-faint); }
 
+  .select:focus-visible,
+  .input:focus-visible {
+    border-color: var(--accent);
+    outline: none;
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
   /* Chevron drawn as a background so no icon font is needed. */
   .select {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2.5' stroke-linecap='square'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2371717f' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 0.75rem center;
   }
 
   .dark .select {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2.5' stroke-linecap='square'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a1a1ad' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   }
 
   /* ----------------------------------------------------------------- cards */
@@ -246,36 +302,8 @@
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
-  }
-
-  /* -------------------------------------------------------------- data rows */
-
-  .datarow {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: baseline;
-    gap: 0.75rem;
-    padding: 0.625rem 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .datarow:last-child { border-bottom: 0; }
-
-  .datarow dt {
-    font-size: 0.8125rem;
-    color: var(--text-muted);
-    font-weight: 400;
-  }
-
-  .datarow dd {
-    margin: 0;
-    font-size: 0.875rem;
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    text-align: right;
-    word-break: break-word;
-    color: var(--text);
-    /* Long values (User-Agent, full address) must wrap, not clip. */
-    white-space: pre-wrap;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
   }
 
   /* --------------------------------------------------------------- badges */
@@ -284,13 +312,14 @@
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    padding: 0.125rem 0.5rem;
-    border-radius: 999px;
+    padding: 0.0625rem 0.5rem;
+    border-radius: var(--radius-pill);
     font-size: 0.6875rem;
     font-weight: 500;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
     border: 1px solid var(--border-strong);
     color: var(--text-muted);
+    white-space: nowrap;
   }
   .pill-warn {
     border-color: transparent;
@@ -304,7 +333,7 @@
   .eyebrow {
     font-size: 0.6875rem;
     font-weight: 600;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-faint);
   }
@@ -321,6 +350,7 @@
     padding: 0.75rem 1rem;
     background: var(--accent);
     color: var(--on-accent);
+    border-radius: 0 0 var(--radius-md) 0;
   }
   .skip-link:focus {
     left: 0;

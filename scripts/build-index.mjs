@@ -30,8 +30,9 @@ for (const file of fs.readdirSync(SRC).filter((f) => f.endsWith(".json"))) {
     code: data.code,
     postalStyle: data.postalStyle,
     postalReal: data.postalReal,
-    // Division codes and names only — enough to populate the selectors.
-    states: data.states.map((s) => ({ code: s.code, name: s.name })),
+    // Division codes and localized names only — enough to populate the
+    // selectors in the active UI language.
+    states: data.states.map((s) => ({ code: s.code, name: s.name, nameL10n: s.nameL10n })),
   };
   totalDivisions += data.states.length;
   const n = data.states.reduce((m, s) => m + s.cities.length, 0);

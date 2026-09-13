@@ -115,6 +115,50 @@ function ensureDump(name) {
   return true;
 }
 
+/**
+ * Builds the localized name record for a place, omitting redundant entries.
+ *
+ * GeoNames does not carry a Chinese name for every division — South Korean
+ * provinces, for example, have `ko`, `en` and `ja` entries but no `zh`. Falling
+ * back to the ASCII name there would print "Gyeongsangbuk-do" on a Chinese
+ * interface, next to Chinese city names.
+ *
+ * Japanese is a legitimate source for those gaps: the Japanese names for these
+ * divisions are written in kanji (慶尚北道), and kanji is largely shared with
+ * Chinese. The substitution is only made when the Japanese string is purely
+ * ideographic — a name containing kana (バーデン＝ヴュルテンベルク州) is a
+ * phonetic rendering and must not be passed off as Chinese.
+ *
+ * Any language whose name equals the ASCII name is dropped. The ASCII name is
+ * already stored, so repeating it costs ~70% of the data file for nothing and
+ * the client falls back to `name` when `nameL10n` is null.
+ *
+ * @param loc   names collected from the alternateNames dump, by language
+ * @param ascii the GeoNames ASCII name
+ * @returns object of differing names, or null when none differ
+ */
+function buildNameL10n(loc, ascii) {
+  const KANA = /[\u3040-\u309F\u30A0-\u30FF]/;
+
+  const candidates = {
+    zh: loc?.zh,
+    en: loc?.en,
+    ja: loc?.ja,
+    ko: loc?.ko,
+  };
+
+  if (!candidates.zh && candidates.ja && !KANA.test(candidates.ja)) {
+    candidates.zh = candidates.ja;
+  }
+
+  const out = {};
+  for (const [lang, value] of Object.entries(candidates)) {
+    if (value && value !== ascii) out[lang] = value;
+  }
+
+  return Object.keys(out).length ? out : null;
+}
+
 /** geonameid|name|asciiname|altnames|lat|lon|class|code|cc|cc2|admin1|...|pop|...|tz */
 function loadCities() {
   if (!ensureDump("cities5000")) throw new Error("cities5000 unavailable");
@@ -125,6 +169,8 @@ function loadCities() {
     const cc = c[8];
     if (!byCC.has(cc)) byCC.set(cc, []);
     byCC.get(cc).push({
+      // Kept so the localized-name pass can join on it.
+      id: c[0],
       name: c[1],
       admin1: c[10],
       pop: Number(c[14]) || 0,
@@ -132,6 +178,24 @@ function loadCities() {
     });
   }
   return byCC;
+}
+
+/**
+ * "CC.ADM1" -> geonameid, so the localized-name map (keyed by geonameid) can be
+ * looked up from a division's country and code.
+ */
+function loadAdmin1Ids() {
+  const file = path.join(CACHE, "admin1CodesASCII.txt");
+  if (!fs.existsSync(file)) {
+    psDownload("https://download.geonames.org/export/dump/admin1CodesASCII.txt", file, 180);
+  }
+  const map = new Map();
+  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+    if (!line) continue;
+    const c = line.split("\t");
+    if (c[0] && c[3]) map.set(c[0], c[3]);
+  }
+  return map;
 }
 
 /** "CC.ADM1" -> English admin-1 name. */
@@ -163,6 +227,97 @@ function normalizeDivision(name) {
     .replace(/[\u0300-\u036f]/g, "") // strip accents
     .toLowerCase()
     .replace(/[^a-z0-9]/g, ""); // drop spaces, dashes, punctuation
+}
+
+/**
+ * Reads GeoNames' `alternateNames` dump once and extracts both admin-1 and city
+ * names, keyed by geonameid.
+ *
+ * This is needed because neither `admin1CodesASCII.txt` nor `cities5000.txt`
+ * carries local-language names: a Chinese interface showing China rendered
+ * every province and city in ASCII ("Chongqing", "Guangzhou") next to Chinese
+ * labels, which reads as a broken translation.
+ *
+ * The dump is ~193 MB compressed and ~710 MB extracted, which exceeds Node's
+ * maximum string length, so it is read as a stream. It is optional: if it is
+ * absent the build still succeeds and the site falls back to ASCII names, so a
+ * fresh clone without the cache produces a working site rather than failing.
+ *
+ * @returns {{ admin1: Map<string, object>, cities: Map<string, object> }}
+ */
+function loadAlternateNames() {
+  const zip = path.join(CACHE, "alternateNames.zip");
+  const dir = path.join(CACHE, "altnames");
+  const file = path.join(dir, "alternateNames.txt");
+
+  const empty = { admin1: new Map(), cities: new Map() };
+
+  if (!fs.existsSync(file)) {
+    if (!fs.existsSync(zip)) {
+      process.stdout.write("  alternateNames.zip absent; admin and city names stay ASCII\n");
+      return empty;
+    }
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    try {
+      unzip(zip, dir);
+    } catch {
+      process.stdout.write("  could not extract alternateNames.zip; names stay ASCII\n");
+      return empty;
+    }
+  }
+  if (!fs.existsSync(file)) return empty;
+
+  // Only the ids we actually ship are of interest, which keeps memory bounded
+  // (the dump holds ~12 million rows across every country).
+  const adminFile = path.join(CACHE, "admin1CodesASCII.txt");
+  const adminIds = new Set();
+  for (const line of fs.readFileSync(adminFile, "utf8").split("\n")) {
+    if (!line) continue;
+    const c = line.split("\t");
+    if (c[3]) adminIds.add(c[3]);
+  }
+
+  const cityIds = new Set();
+  for (const line of fs.readFileSync(path.join(CACHE, "cities5000.txt"), "utf8").split("\n")) {
+    if (!line) continue;
+    const c = line.split("\t");
+    if (c[0] && CODES.includes(c[8])) cityIds.add(c[0]);
+  }
+
+  const WANTED = new Set(["zh", "en", "ja", "ko"]);
+  const admin1 = new Map();
+  const cities = new Map();
+
+  const fd = fs.openSync(file, "r");
+  const buf = Buffer.alloc(1 << 22);
+  let carry = "";
+  let bytes;
+  while ((bytes = fs.readSync(fd, buf, 0, buf.length, null)) > 0) {
+    const chunk = carry + buf.toString("utf8", 0, bytes);
+    const lines = chunk.split("\n");
+    carry = lines.pop() ?? "";
+    for (const line of lines) {
+      const c = line.split("\t");
+      const id = c[1];
+      const isAdmin = adminIds.has(id);
+      const isCity = cityIds.has(id);
+      if (!isAdmin && !isCity) continue;
+
+      const lang = c[2];
+      if (!WANTED.has(lang)) continue;
+      const name = c[3];
+      if (!name || name.length > 48) continue;
+
+      const bucket = isAdmin ? admin1 : cities;
+      if (!bucket.has(id)) bucket.set(id, {});
+      const rec = bucket.get(id);
+      // GeoNames orders preferred names first, so the first hit per language wins.
+      if (!rec[lang]) rec[lang] = name;
+    }
+  }
+  fs.closeSync(fd);
+
+  return { admin1, cities };
 }
 
 /**
@@ -289,6 +444,15 @@ function syntheticPostal(style, seed) {
 
 const citiesByCC = loadCities();
 const admin1Map = loadAdmin1();
+const admin1Ids = loadAdmin1Ids();
+const localized = loadAlternateNames();
+const admin1Localized = localized.admin1;
+const cityLocalized = localized.cities;
+if (admin1Localized.size || cityLocalized.size) {
+  console.log(
+    `localized names: ${admin1Localized.size} divisions, ${cityLocalized.size} cities`,
+  );
+}
 const report = [];
 
 for (const cc of CODES) {
@@ -359,8 +523,21 @@ for (const cc of CODES) {
     outStates.push({
       code: st.code,
       name: st.name,
+      // Localized names for the UI. A missing translation degrades to the ASCII
+      // name rather than rendering an empty option.
+      nameL10n: buildNameL10n(admin1Localized.get(admin1Ids.get(`${cc}.${st.code}`)), st.name),
       postal: examples,
-      cities: chosen.map((c) => ({ n: c.name, pop: c.pop, tz: c.tz })),
+      cities: chosen.map((c) => {
+        const loc = cityLocalized.get(c.id);
+        return {
+          n: c.name,
+          // Localized city name, same reasoning as the division name: the CJK
+          // address templates concatenate it directly onto the street address.
+          nL10n: loc ? buildNameL10n(loc, c.name) : null,
+          pop: c.pop,
+          tz: c.tz,
+        };
+      }),
     });
   }
 
