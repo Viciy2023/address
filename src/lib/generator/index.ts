@@ -18,7 +18,7 @@
 import { Rng } from "./rng.js";
 import { makePostal } from "./postal.js";
 import { makeNationalId } from "./identifiers.js";
-import type { CountrySpec, LocalizedText, Lang } from "../registry.js";
+import type { CountrySpec, DataLang, LocalizedText, Lang } from "../registry.js";
 import {
   AU_STATE,
   BR_UF,
@@ -401,7 +401,7 @@ export function generateIdentity(
    * The labels are applied by the UI from the string table, so the generator
    * only needs the data language for values.
    */
-  const L: Lang = spec.dataLang;
+  const L: DataLang = spec.dataLang;
   const lv = (v: L10n): string => v[L] ?? v.en;
   const pickL = (arr: readonly L10n[]): string => lv(rng.pick(arr));
 
@@ -434,6 +434,24 @@ export function generateIdentity(
    * Countries with Latin-script addresses are unaffected: they separate the
    * parts, so an untranslated name is merely untranslated.
    */
+  /*
+   * City selection.
+   *
+   * Two cases, both driven by whether the address concatenates its parts:
+   *
+   *   concatenated  The city is glued to the street with no separator, so a
+   *                 name in the wrong script breaks the string ("愛知県Nagoya-shi
+   *                 本町通り"). Only cities whose name is genuinely written in
+   *                 the record's language may be used.
+   *   separated     The parts are space- or comma-separated, so a foreign script
+   *                 is merely untranslated. Any city is acceptable; the
+   *                 localized name is used when the data has one.
+   *
+   * `concatenated` looks at both the spec's own street pool and the shared
+   * STREET_STYLES table, because Russia and the other Latin-script countries
+   * keep their pools in the latter.
+   */
+  const style = STREET_STYLES[spec.code];
   const concatenated = Boolean(spec.address.streets);
   const localizedCities = concatenated
     ? division.cities.filter((c) => isNativeScript(c.nL10n?.[L], L))
@@ -443,6 +461,12 @@ export function generateIdentity(
   // division name alone.
   const city = localizedCities.length ? rng.pick(localizedCities) : null;
 
+  /*
+   * The city name prefers the record language's own form. For Russia this is
+   * Cyrillic (Магадан), which the data carries but earlier code never reached
+   * because the localization branch was gated on the spec's street pool rather
+   * than on whether a localized name exists.
+   */
   const cityName =
     city?.nL10n?.[L] ||
     city?.n ||
@@ -526,7 +550,6 @@ export function generateIdentity(
    * The per-country pool on the spec wins; otherwise the shared table is
    * consulted; otherwise the English default applies.
    */
-  const style = STREET_STYLES[spec.code];
   const streetNames = spec.address.streets ?? style?.streets ?? [
     "Main", "Oak", "Park", "Elm", "Maple", "Cedar", "Pine", "Lake", "Hill",
     "Walnut", "Sunset", "Church", "Market", "Highland", "Victoria", "Station",

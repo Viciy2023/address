@@ -148,6 +148,95 @@ function ensureDump(name) {
  * The mapping is explicit rather than generated, because transliterating
  * Cantonese place names by rule produces wrong characters.
  */
+
+/**
+ * Thai province names in Thai script.
+ *
+ * GeoNames' Thai alternatenames carry zh/ja/ko/ru but no Thai, so all 77
+ * provinces and 253 cities would render in Latin on a Thai record. The province
+ * names are established geography, so they are supplied here; city names fall
+ * back to their romanised form, which is how they appear on English signage.
+ */
+const TH_PROVINCES = {
+  "Amnat Charoen": "อำนาจเจริญ",
+  "Ang Thong": "อ่างทอง",
+  "Bangkok": "กรุงเทพมหานคร",
+  "Bueng Kan": "บึงกาฬ",
+  "Buriram": "บุรีรัมย์",
+  "Chachoengsao": "ฉะเชิงเทรา",
+  "Chai Nat": "ชัยนาท",
+  "Chaiyaphum": "ชัยภูมิ",
+  "Chanthaburi": "จันทบุรี",
+  "Chiang Mai": "เชียงใหม่",
+  "Chiang Rai": "เชียงราย",
+  "Chon Buri": "ชลบุรี",
+  "Chumphon": "ชุมพร",
+  "Kalasin": "กาฬสินธุ์",
+  "Kamphaeng Phet": "กำแพงเพชร",
+  "Kanchanaburi": "กาญจนบุรี",
+  "Khon Kaen": "ขอนแก่น",
+  "Krabi": "กระบี่",
+  "Lampang": "ลำปาง",
+  "Lamphun": "ลำพูน",
+  "Loei": "เลย",
+  "Lopburi": "ลพบุรี",
+  "Mae Hong Son": "แม่ฮ่องสอน",
+  "Maha Sarakham": "มหาสารคาม",
+  "Mukdahan": "มุกดาหาร",
+  "Nakhon Nayok": "นครนายก",
+  "Nakhon Pathom": "นครปฐม",
+  "Nakhon Phanom": "นครพนม",
+  "Nakhon Ratchasima": "นครราชสีมา",
+  "Nakhon Sawan": "นครสวรรค์",
+  "Nakhon Si Thammarat": "นครศรีธรรมราช",
+  "Nan": "น่าน",
+  "Narathiwat": "นราธิวาส",
+  "Nong Bua Lamphu": "หนองบัวลำภู",
+  "Nong Khai": "หนองคาย",
+  "Nonthaburi": "นนทบุรี",
+  "Pathum Thani": "ปทุมธานี",
+  "Pattani": "ปัตตานี",
+  "Phang Nga": "พังงา",
+  "Phatthalung": "พัทลุง",
+  "Phayao": "พะเยา",
+  "Phetchabun": "เพชรบูรณ์",
+  "Phetchaburi": "เพชรบุรี",
+  "Phichit": "พิจิตร",
+  "Phitsanulok": "พิษณุโลก",
+  "Phra Nakhon Si Ayutthaya": "พระนครศรีอยุธยา",
+  "Phrae": "แพร่",
+  "Phuket": "ภูเก็ต",
+  "Prachin Buri": "ปราจีนบุรี",
+  "Prachuap Khiri Khan": "ประจวบคีรีขันธ์",
+  "Ranong province": "ระนอง",
+  "Ratchaburi": "ราชบุรี",
+  "Rayong": "ระยอง",
+  "Roi Et": "ร้อยเอ็ด",
+  "Sa Kaeo": "สระแก้ว",
+  "Sakon Nakhon": "สกลนคร",
+  "Samut Prakan": "สมุทรปราการ",
+  "Samut Sakhon": "สมุทรสาคร",
+  "Samut Songkhram": "สมุทรสงคราม",
+  "Saraburi": "สระบุรี",
+  "Satun": "สตูล",
+  "Si Sa Ket": "ศรีสะเกษ",
+  "Sing Buri": "สิงห์บุรี",
+  "Songkhla": "สงขลา",
+  "Sukhothai": "สุโขทัย",
+  "Suphan Buri": "สุพรรณบุรี",
+  "Surat Thani": "สุราษฎร์ธานี",
+  "Surin": "สุรินทร์",
+  "Tak": "ตาก",
+  "Trang": "ตรัง",
+  "Trat": "ตราด",
+  "Ubon Ratchathani": "อุบลราชธานี",
+  "Udon Thani": "อุดรธานี",
+  "Uthai Thani": "อุทัยธานี",
+  "Uttaradit": "อุตรดิตถ์",
+  "Yala": "ยะลา",
+  "Yasothon": "ยโสธร"
+};
+
 const HK_MO_NAMES = {
   "Central and Western District": "中西區",
   "Wan Chai District": "灣仔區",
@@ -212,6 +301,9 @@ function buildNameL10n(loc, ascii) {
 
   // Hong Kong and Macau districts: prefer the curated Chinese name.
   if (HK_MO_NAMES[ascii]) out.zh = HK_MO_NAMES[ascii];
+
+  // Thai provinces: supply the Thai form GeoNames lacks.
+  if (TH_PROVINCES[ascii]) out.th = TH_PROVINCES[ascii];
 
   return Object.keys(out).length ? out : null;
 }

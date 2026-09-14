@@ -99,7 +99,50 @@ for (const cc of COUNTRY_CODES) {
     if (addr.includes("\n")) findings.push({ cc, group: "address", field: "fullAddress", value: addr, why: "multi-line" });
     if (addr.includes("  ")) findings.push({ cc, group: "address", field: "fullAddress", value: addr, why: "double space" });
     if (/,\s*,/.test(addr)) findings.push({ cc, group: "address", field: "fullAddress", value: addr, why: "empty segment" });
-    if (/\d{1,3}\s*$/.test(addr) === false && addr.length > 0) { /* informational only */ }
+
+    /*
+     * City and division names must be in the record's language where that
+     * language has its own script. This is the check that catches a country
+     * whose dataLang says "ru" but whose cities are still romanised.
+     */
+    const NATIVE: Record<string, RegExp> = {
+      // Japanese names are mostly kanji, so the test must accept Han as well as
+      // kana; using kana alone wrongly flags 愛知県 and 豊川市.
+      zh: HAN,
+      ja: /[\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF]/,
+      ko: HANGUL,
+      ru: CYRILLIC,
+      th: THAI,
+      ar: ARABIC,
+      he: HEBREW,
+    };
+    const nativeRe = NATIVE[lang];
+    if (nativeRe) {
+      for (const key of ["city", "state"] as const) {
+        const v = id.map[key] ?? "";
+        if (!v || nativeRe.test(v)) continue;
+
+        /*
+         * A Latin name is only a defect if the data HAS a native form that we
+         * failed to use. Some sources genuinely lack one — GeoNames carries no
+         * Thai names for Thai cities — and there the romanised form is what
+         * appears on signage, so it is correct rather than a bug.
+         *
+         * Distinguish the two by asking the dataset directly.
+         */
+        const division = data.states.find((s) => s.code === id.map.stateCode);
+        const hasNative =
+          key === "state"
+            ? Boolean(division?.nameL10n?.[lang])
+            : Boolean(division?.cities.some((c) => c.n === v && c.nL10n?.[lang]));
+
+        if (hasNative) {
+          findings.push({ cc, group: "address", field: key, value: v, why: `native ${lang} name exists but was not used` });
+        } else {
+          findings.push({ cc, group: "address", field: key, value: v, why: `no ${lang} name in the data source (romanised fallback, acceptable)` });
+        }
+      }
+    }
 
     // Pinyin leaking into a CJK name.
     const full = id.map.fullName ?? "";

@@ -21,13 +21,39 @@
  * legacy Windows code page.
  */
 
+/** Interface languages the site is translated into. */
 export type Lang = "zh" | "en" | "ja" | "ko";
 
+/**
+ * Languages a record may be written in.
+ *
+ * This is a superset of the interface languages: a Russian record is written in
+ * Cyrillic and a Thai one in Thai, even though the site has no Russian or Thai
+ * translation. Keeping them as one type forced Russian records to declare
+ * English, which is why their cities rendered as "Shumerlya".
+ */
+export type DataLang = Lang | "ru" | "th" | "vi" | "ar" | "he" | "tr" | "pt" | "es" | "fr" | "de" | "it" | "nl" | "sv" | "nb" | "pl" | "id" | "ms";
+
+/**
+ * A value translated for the record languages in use.
+ *
+ * Not every language is present on every value; the generator falls back to
+ * `en` when the record's language is absent, and consumers must tolerate
+ * missing keys.
+ */
 export interface LocalizedText {
   zh: string;
   en: string;
   ja: string;
   ko: string;
+  /** Russian, present on countries whose records are written in Cyrillic. */
+  ru?: string;
+  /**
+   * Other record languages (Thai, Arabic, Vietnamese, …). Optional because a
+   * given value is rarely translated into all of them; the generator falls back
+   * to `en` when the record's language is absent.
+   */
+  [lang: string]: string | undefined;
 }
 
 export type PostalStyle =
@@ -143,7 +169,7 @@ export interface CountrySpec {
    * Falls back to the UI language when unset, which is correct for the
    * Latin-script countries where the two coincide.
    */
-  dataLang: Lang;
+  dataLang: DataLang;
 }
 
 /**
@@ -1245,7 +1271,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "RU",
-    dataLang: "en",
+    dataLang: "ru",
     name: L("俄罗斯", "Russia", "ロシア", "러시아"),
     nationality: L("俄罗斯", "Russian", "ロシア人", "러시아인"),
     language: L("俄语", "Russian", "ロシア語", "러시아어"),
@@ -1285,7 +1311,7 @@ export const COUNTRIES: CountrySpec[] = [
     incomeBands: ["60,000-95,000 ₽", "95,000-140,000 ₽", "140,000-200,000 ₽", "200,000-300,000 ₽"],
     usesBloodType: true,
     usesEthnicity: true,
-    schools: ["Lomonosov Moscow State University", "Bauman Moscow State Technical University", "Saint Petersburg State University"],
+    schools: ["МГУ имени М.В. Ломоносова", "СПбГУ", "МГТУ имени Н.Э. Баумана", "НИУ ВШЭ", "МФТИ", "НГУ"],
     majors: [
       L("航空航天工程", "Aerospace Engineering", "航空宇宙工学", "항공우주공학"),
       L("核物理", "Nuclear Physics", "核物理学", "핵물리학"),
@@ -1793,7 +1819,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "TH",
-    dataLang: "en",
+    dataLang: "th",
     name: L("泰国", "Thailand", "タイ", "태국"),
     nationality: L("泰国", "Thai", "タイ人", "태국인"),
     language: L("泰语", "Thai", "タイ語", "태국어"),
