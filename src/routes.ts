@@ -26,6 +26,7 @@ export interface RouteDef {
 
 export const ROUTES: RouteDef[] = [
   { path: "", priority: 1.0, changefreq: "weekly", index: true },
+  { path: "mail", priority: 0.9, changefreq: "monthly", index: true },
   { path: "countries", priority: 0.8, changefreq: "monthly", index: true },
   { path: "credits", priority: 0.5, changefreq: "yearly", index: true },
   { path: "about", priority: 0.5, changefreq: "yearly", index: true },

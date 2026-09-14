@@ -26,9 +26,14 @@
  *
  * `import.meta.env` is Vite's; `process.env` is the Node build process and is
  * also where Cloudflare's injected variables land during the Pages build.
+ *
+ * `import.meta.env` is absent when the module is loaded by plain Node — the
+ * build scripts and the test suite do exactly that — so it is probed rather
+ * than assumed.
  */
 function readEnv(name: string): string | undefined {
-  const fromVite = (import.meta.env as Record<string, string | undefined>)[name];
+  const viteEnv = (import.meta as { env?: Record<string, string | undefined> }).env;
+  const fromVite = viteEnv ? viteEnv[name] : undefined;
   const fromProcess =
     typeof process !== "undefined" ? process.env?.[name] : undefined;
   const value = fromVite || fromProcess;
@@ -111,10 +116,22 @@ export const SITE = {
   email: "cyuan52@gmail.com",
   /** Telegram contact, surfaced in the footer and on the contact page. */
   telegram: "https://t.me/ccy2056",
+  /**
+   * Temporary mailbox API origin.
+   *
+   * A separately deployed instance of the cloudflare_temp_email worker. The
+   * mailbox feature talks to it directly from the browser, so the address is
+   * public by nature and baked in at build time.
+   *
+   * This is the one part of the site that contacts a server. The privacy policy
+   * discloses it explicitly; previously the policy said no request was ever
+   * sent, which the mailbox would have made false.
+   */
+  mailApi: readEnv("PUBLIC_MAIL_API_URL")?.replace(/\/+$/, "") || "https://mail.yiscience.cn",
   /** AdSense publisher id. Empty means "no ads" — the banner is not rendered. */
-  adsenseClient: import.meta.env.ADSENSE_CLIENT ?? process.env.ADSENSE_CLIENT ?? "",
+  adsenseClient: readEnv("ADSENSE_CLIENT") ?? "",
   /** Cloudflare Web Analytics token. Empty means "no analytics". */
-  analyticsToken: import.meta.env.CF_ANALYTICS_TOKEN ?? process.env.CF_ANALYTICS_TOKEN ?? "",
+  analyticsToken: readEnv("CF_ANALYTICS_TOKEN") ?? "",
 } as const;
 
 /**

@@ -1063,5 +1063,74 @@ console.log("\n=== generated values match country conventions ===");
   for (const e of examples) console.log(`    ${e}`);
 }
 
+
+console.log("\n=== mailbox helpers ===");
+{
+  /*
+   * The mailbox talks to a separate server, so it cannot be exercised here —
+   * but the two pure helpers can, and both have a correctness requirement:
+   * extractCodes must find the code a visitor needs, and sanitizeHtml must
+   * neutralise anything a sender could put in a message body.
+   */
+  const { extractCodes, sanitizeHtml } = await import("../src/lib/mail/api.ts");
+
+  // Code extraction: the common shapes a real message uses.
+  const codeCases: [string, string, string | null][] = [
+    ["plain six digits", "Your verification code is 483920.", "483920"],
+    ["subject only", "712645 is your code", "712645"],
+    ["four digits", "Code: 5521", "5521"],
+    ["eight digits", "token 20241231 expires soon", "20241231"],
+    ["no code", "Welcome to the service. No action needed.", null],
+  ];
+  let codeChecked = 0;
+  let codeBad = 0;
+  for (const [label, body, expected] of codeCases) {
+    const found = extractCodes({ subject: "", text: body });
+    codeChecked++;
+    if (expected === null) {
+      // A message without a code should not invent one from a stray number.
+      if (found.length > 0) {
+        codeBad++;
+        console.error(`  FAIL: ${label} produced ${JSON.stringify(found)} but should find none`);
+      }
+    } else if (!found.includes(expected)) {
+      codeBad++;
+      console.error(`  FAIL: ${label} -> ${JSON.stringify(found)}, expected ${expected}`);
+    }
+  }
+  check(codeBad === 0, `${codeBad}/${codeChecked} verification codes were not extracted correctly`);
+  console.log(`  ${codeChecked - codeBad}/${codeChecked} verification codes extracted correctly`);
+
+  // Sanitiser: only runs with a DOM, so it is skipped outside the browser.
+  if (typeof DOMParser === "undefined") {
+    console.log("  sanitizeHtml: skipped (needs a DOM; verified in the browser instead)");
+  } else {
+    const xssCases = [
+      "<script>alert(1)</script><p>ok</p>",
+      '<img src=x onerror="alert(2)">',
+      '<a href="javascript:alert(3)">x</a>',
+      "<iframe src=\"https://evil.example\"></iframe>",
+      '<p onclick="alert(4)">t</p>',
+      "<style>body{display:none}</style>",
+    ];
+    let xssBad = 0;
+    for (const c of xssCases) {
+      const out = sanitizeHtml(c);
+      if (/<script|onerror=|onclick=|javascript:|<iframe|<style/i.test(out)) {
+        xssBad++;
+        console.error(`  FAIL: sanitizer left \`${out}\` from \`${c}\``);
+      }
+    }
+    check(xssBad === 0, `${xssBad}/${xssCases.length} hostile bodies survived sanitising`);
+    console.log(`  ${xssCases.length - xssBad}/${xssCases.length} hostile bodies neutralised`);
+
+    // Legitimate formatting must survive.
+    const kept = sanitizeHtml("<p>Hello <b>world</b></p><a href=\"https://ok.example\">link</a>");
+    check(kept.includes("<b>world</b>") && kept.includes("https://ok.example"),
+      "sanitizer stripped legitimate formatting");
+    console.log("  legitimate formatting preserved");
+  }
+}
+
 console.log(`\n${failures === 0 ? "PASS" : "FAIL"} — ${checks} checks, ${failures} failures`);
 process.exit(failures === 0 ? 0 : 1);

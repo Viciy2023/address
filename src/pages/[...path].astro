@@ -20,11 +20,13 @@ import ProsePage from "../views/ProsePage.astro";
 import CountriesView from "../views/CountriesView.astro";
 import CountryView from "../views/CountryView.astro";
 import CreditsView from "../views/CreditsView.astro";
+import MailView from "../views/MailView.astro";
 import { ROUTES, countryPath, type RouteDef } from "../routes";
 import { LANGS, SITE, type SiteLang, absolute } from "../config";
 import { t } from "../i18n/strings";
 import { ABOUT, CONTACT, TERMS, type PageCopy } from "../content";
 import { COUNTRY_PAGE } from "../country-content";
+import { mailStrings } from "../i18n/mail";
 import { buildPrivacy } from "../privacy";
 import { availableCountries, totalCityCount, totalDivisionCount } from "../lib/data";
 import { COUNTRIES, COUNTRY_BY_CODE } from "../lib/registry";
@@ -73,6 +75,7 @@ export const getStaticPaths: GetStaticPaths = () => {
 
 const { lang, route, country } = Astro.props as unknown as PathProps;
 const s = t(lang);
+const mc = mailStrings(lang);
 const isHome = route.path === "";
 const isCountry = Boolean(country);
 
@@ -123,21 +126,27 @@ const countryDescription = cSpec
   ? cc.intro.replace(/\{name\}/g, cName).replace(/\{id\}/g, (cSpec.id.name[lang] ?? cSpec.id.name.en)).slice(0, 300)
   : "";
 
+/* The mailbox page has its own copy module. */
+const isMail = route.path === "mail";
 const title = isHome
   ? homeTitle
-  : isCountry
-    ? countryTitle
-    : copy
-      ? `${copy.title} | ${s.brand}`
-      : route.path === "countries"
-        ? `${s.countriesTitle} | ${s.brand}`
-        : `${s.creditsTitle} | ${s.brand}`;
+  : isMail
+    ? `${mc.title} | ${s.brand}`
+    : isCountry
+      ? countryTitle
+      : copy
+        ? `${copy.title} | ${s.brand}`
+        : route.path === "countries"
+          ? `${s.countriesTitle} | ${s.brand}`
+          : `${s.creditsTitle} | ${s.brand}`;
 
 const description = isHome
   ? homeDescription
-  : isCountry
-    ? countryDescription
-    : (copy?.intro ?? (route.path === "countries" ? s.countriesSub : s.disclaimerBody));
+  : isMail
+    ? mc.intro
+    : isCountry
+      ? countryDescription
+      : (copy?.intro ?? (route.path === "countries" ? s.countriesSub : s.disclaimerBody));
 
 /* -------------------------------------------------------- structured data */
 
@@ -241,6 +250,8 @@ const breadcrumb = {
     <CountryView {lang} code={country} />
   ) : copy ? (
     <ProsePage {copy} email={SITE.email} />
+  ) : isMail ? (
+    <MailView {lang} />
   ) : route.path === "countries" ? (
     <CountriesView {lang} />
   ) : (

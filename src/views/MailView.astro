@@ -1,0 +1,56 @@
+---
+/**
+ * Temporary mailbox page.
+ *
+ * Structure mirrors the generator page: a short hero, the tool itself, then
+ * short explanatory sections. Keeping the two pages visually parallel is what
+ * makes the mailbox read as part of the same site rather than an embedded
+ * third-party service.
+ */
+import Mailbox from "../components/Mailbox.svelte";
+import type { SiteLang } from "../config";
+import { mailStrings } from "../i18n/mail";
+
+interface Props {
+  lang: SiteLang;
+}
+const { lang } = Astro.props as Props;
+const m = mailStrings(lang);
+---
+
+<section class="hero">
+  <div class="shell">
+    <h1>{m.title}</h1>
+    <p class="hero-sub">{m.intro}</p>
+  </div>
+</section>
+
+<section class="shell workspace" aria-label={m.title}>
+  <Mailbox client:load {lang} />
+</section>
+
+<style>
+  .hero {
+    padding-block: 3rem 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .hero h1 {
+    font-size: clamp(2rem, 6vw, 3rem);
+    letter-spacing: -0.035em;
+    margin: 0 0 1rem;
+    max-width: 22ch;
+  }
+
+  .hero-sub {
+    font-size: 1.0625rem;
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0;
+    line-height: 1.7;
+  }
+
+  .workspace {
+    padding-block: 2.5rem;
+  }
+</style>
