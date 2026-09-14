@@ -57,6 +57,18 @@ const L = {
     modify: "元データには以下の加工を施しています：都市は人口で選別・整列、郵便番号の接頭辞は行政区単位で集約、姓名データは転送量削減のため抽出・圧縮しています。生成時のランダム化は本サイト独自のアルゴリズムによるもので、元データには含まれません。",
     noWarranty: "各データソースは「現状のまま」提供され、正確性について保証はありません。",
   },
+  "zh-hant": {
+    intro: "本站的資料來自以下自由授權的開源資料集。我們在此向維護者致謝。",
+    geonamesDesc: "行政區劃、城市名稱、人口排序、時區與郵遞區號。",
+    fakerDesc: "各國姓名資料庫與職業名稱模式。",
+    cldrDesc: "國家、語言與貨幣的顯示名稱。",
+    licence: "授權",
+    usage: "用途",
+    stats: "資料規模",
+    statsBody: `目前收錄 ${countries} 個國家與地區、${divisions} 個行政區、${cities} 個城市。`,
+    modify: "我們對原始資料做了以下處理：依人口篩選城市、依行政區彙整郵遞區號前綴、將姓名資料抽樣壓縮以減少傳輸量。產生過程中的隨機變化由本站的演算法產生，不屬於原始資料。",
+    noWarranty: "各資料來源均依「現狀」提供，不對準確性作任何保證。",
+  },
   ko: {
     intro: "이 사이트는 아래의 오픈 라이선스 데이터셋을 기반으로 합니다. 유지보수자분들께 감사드립니다.",
     geonamesDesc: "행정 구역, 도시 이름, 인구 순위, 시간대, 우편번호.",
@@ -130,7 +142,7 @@ const sources = [
   </section>
 
   <section class="block">
-    <h2>{lang === "zh" ? "数据加工说明" : lang === "ja" ? "データ加工について" : lang === "ko" ? "데이터 가공 안내" : "How we transform the data"}</h2>
+    <h2>{lang === "zh" ? "数据加工说明" : lang === "zh-hant" ? "資料加工說明" : lang === "ja" ? "データ加工について" : lang === "ko" ? "데이터 가공 안내" : "How we transform the data"}</h2>
     <p>{L.modify}</p>
     <p class="faint">{L.noWarranty}</p>
   </section>

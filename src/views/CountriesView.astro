@@ -35,7 +35,9 @@ const rows = COUNTRIES.filter((c) => getCountrySummary(c.code)).map((c) => {
 const headers =
   lang === "zh"
     ? ["国家和地区", "ISO", "行政区", "城市", "邮编格式", "证件号码", "货币"]
-    : lang === "ja"
+    : lang === "zh-hant"
+      ? ["國家和地區", "ISO", "行政區", "城市", "郵遞區號格式", "證件號碼", "貨幣"]
+      : lang === "ja"
       ? ["国・地域", "ISO", "行政区", "都市", "郵便番号形式", "公的番号", "通貨"]
       : lang === "ko"
         ? ["국가·지역", "ISO", "행정구역", "도시", "우편번호 형식", "공적 번호", "통화"]
@@ -47,7 +49,9 @@ const cityCounts: Record<string, number> = (await import("../data/city-counts.js
 const note =
   lang === "zh"
     ? "「邮编格式」列中标注 ✓ 表示邮编来自 GeoNames 的真实数据；标注 ~ 表示该国无权威数据源，按格式生成。"
-    : lang === "ja"
+    : lang === "zh-hant"
+      ? "「郵遞區號格式」欄中標註 ✓ 表示郵遞區號來自 GeoNames 的真實資料；標註 ~ 表示該國無權威資料來源，依格式產生。"
+      : lang === "ja"
       ? "「郵便番号形式」列の ✓ は GeoNames の実データに基づくことを、~ は正式なデータ源がなく形式に沿って生成していることを示します。"
       : lang === "ko"
         ? "'우편번호 형식' 열의 ✓는 GeoNames 실제 데이터 기반, ~는 공식 데이터 소스가 없어 형식에 맞춰 생성했음을 뜻합니다."

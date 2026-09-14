@@ -86,20 +86,24 @@ const totalDivisions = totalDivisionCount();
 const homeDescription =
   lang === "zh"
     ? `免费在线生成 ${codes.length} 个国家和地区的真实格式身份信息：姓名、地址、邮编、电话、证件号、职业与在线资料。共 ${totalDivisions} 个行政区、${totalCities} 个城市，字段内部一致且可复现。`
-    : lang === "ja"
-      ? `${codes.length} の国と地域の実際の形式に沿った身元情報を無料生成。氏名、住所、郵便番号、電話、公的番号、職業、オンラインプロフィールに対応。${totalDivisions} の行政区と ${totalCities} の都市を収録。`
-      : lang === "ko"
-        ? `${codes.length}개 국가와 지역의 실제 형식에 맞는 신원 정보를 무료로 생성합니다. 이름, 주소, 우편번호, 전화, 공적 번호, 직업, 온라인 프로필을 지원합니다.`
-        : `Generate realistic-format identity data for ${codes.length} countries and regions for free: names, addresses, postal codes, phone numbers, national IDs, employment and online profiles. ${totalDivisions} divisions and ${totalCities} cities, internally consistent and reproducible.`;
+    : lang === "zh-hant"
+      ? `免費線上產生 ${codes.length} 個國家與地區的真實格式身份資訊：姓名、地址、郵遞區號、電話、證件號、職業與線上資料。共 ${totalDivisions} 個行政區、${totalCities} 個城市，欄位內部一致且可重現。`
+      : lang === "ja"
+        ? `${codes.length} の国と地域の実際の形式に沿った身元情報を無料生成。氏名、住所、郵便番号、電話、公的番号、職業、オンラインプロフィールに対応。${totalDivisions} の行政区と ${totalCities} の都市を収録。`
+        : lang === "ko"
+          ? `${codes.length}개 국가와 지역의 실제 형식에 맞는 신원 정보를 무료로 생성합니다. 이름, 주소, 우편번호, 전화, 공적 번호, 직업, 온라인 프로필을 지원합니다.`
+          : `Generate realistic-format identity data for ${codes.length} countries and regions for free: names, addresses, postal codes, phone numbers, national IDs, employment and online profiles. ${totalDivisions} divisions and ${totalCities} cities, internally consistent and reproducible.`;
 
 const homeTitle =
   lang === "zh"
     ? `${s.heroTitle} - ${codes.length} 个国家和地区真实格式数据 | ${s.brand}`
-    : lang === "ja"
-      ? `${s.heroTitle} - ${codes.length} の国と地域に対応 | ${s.brand}`
-      : lang === "ko"
-        ? `${s.heroTitle} - ${codes.length}개 국가 및 지역 지원 | ${s.brand}`
-        : `${s.heroTitle} - Realistic Data for ${codes.length} Countries | ${s.brand}`;
+    : lang === "zh-hant"
+      ? `${s.heroTitle} - ${codes.length} 個國家與地區真實格式資料 | ${s.brand}`
+      : lang === "ja"
+        ? `${s.heroTitle} - ${codes.length} の国と地域に対応 | ${s.brand}`
+        : lang === "ko"
+          ? `${s.heroTitle} - ${codes.length}개 국가 및 지역 지원 | ${s.brand}`
+          : `${s.heroTitle} - Realistic Data for ${codes.length} Countries | ${s.brand}`;
 
 const COPY: Record<string, PageCopy> = {
   about: ABOUT[lang],
@@ -116,7 +120,7 @@ const cSpec = country ? COUNTRY_BY_CODE[country] : undefined;
 const cName = cSpec?.name[lang] ?? "";
 const countryTitle = cSpec ? `${cName} — ${SITE.product[lang]} | ${s.brand}` : "";
 const countryDescription = cSpec
-  ? cc.intro.replace(/\{name\}/g, cName).replace(/\{id\}/g, cSpec.id.name[lang]).slice(0, 300)
+  ? cc.intro.replace(/\{name\}/g, cName).replace(/\{id\}/g, (cSpec.id.name[lang] ?? cSpec.id.name.en)).slice(0, 300)
   : "";
 
 const title = isHome

@@ -164,7 +164,7 @@
       <div class="summary-media">
         {#if avatarSeed}
           <img
-            src={"https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/" + avatarSeed + "/256.jpg"}
+            src={"https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/" + avatarSeed + ".jpg"}
             alt=""
             width="72"
             height="72"

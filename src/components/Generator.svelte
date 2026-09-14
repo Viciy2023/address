@@ -81,7 +81,8 @@
          portrait is loaded from the same CDN faker documents. */
       const sex = identity.summary.gender === "Female" ? "female" : "male";
       const idx = parseInt(identity.summary.avatarSeed.slice(0, 6), 36) % 100;
-      avatarSeed = `${sex}/${idx}`;
+      // The CDN path is /SEX/SIZE/INDEX.jpg, so size must come before the index.
+      avatarSeed = `${sex}/256/${idx}`;
       error = "";
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);

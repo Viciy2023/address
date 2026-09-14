@@ -35,8 +35,8 @@ const spec = COUNTRY_BY_CODE[code];
 const summary = getCountrySummary(code);
 const sample = await buildCountrySample(code, lang);
 
-const name = spec.name[lang];
-const idName = spec.id.name[lang];
+const name = spec.name[lang] ?? spec.name.en;
+const idName = spec.id.name[lang] ?? spec.id.name.en;
 
 /** Substitutes the placeholders the copy uses. */
 const fill = (tpl: string) => tpl.replace(/\{name\}/g, name).replace(/\{id\}/g, idName);
@@ -62,9 +62,9 @@ const addr = {
 
 /** Fact rows, in display order. Empty postal is handled explicitly. */
 const facts: { label: string; value: string; hint?: string }[] = [
-  { label: c.lNationality, value: spec.nationality[lang] },
-  { label: c.lLanguage, value: spec.language[lang] },
-  { label: c.lCurrency, value: `${spec.currency} ${spec.currencyLabel[lang]}`.trim() },
+  { label: c.lNationality, value: spec.nationality[lang] ?? spec.nationality.en },
+  { label: c.lLanguage, value: spec.language[lang] ?? spec.language.en },
+  { label: c.lCurrency, value: `${spec.currency} ${spec.currencyLabel[lang] ?? spec.currencyLabel.en}`.trim() },
   { label: c.lPhone, value: `+${spec.phone.code}` },
   {
     label: c.lPostal,
@@ -77,7 +77,7 @@ const facts: { label: string; value: string; hint?: string }[] = [
     label: c.lIdValid,
     value: spec.id.hasRealChecksum ? c.lIdChecksumYes : c.lIdFormatOnly,
   },
-  { label: c.lAdmin, value: spec.address.adminLabel[lang] },
+  { label: c.lAdmin, value: spec.address.adminLabel[lang] ?? spec.address.adminLabel.en },
   { label: c.lDivisions, value: String(divisionCount) },
   { label: c.lCities, value: String(cityCount) },
 ];

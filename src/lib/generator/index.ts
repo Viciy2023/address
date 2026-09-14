@@ -112,7 +112,7 @@ export interface GenerateOptions {
    * Without it a Chinese interface showed a Chinese address with an English
    * province name, because GeoNames' ASCII table has no local names.
    */
-  lang?: Lang;
+  lang?: DataLang;
 }
 
 /* ------------------------------------------------------------------ */

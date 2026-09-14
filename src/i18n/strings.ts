@@ -93,13 +93,13 @@ export interface Strings {
 }
 
 const zh: Strings = {
-  brand: "Aimei",
-  navGenerate: "生成器",
+  brand: "云栖数据",
+  navGenerate: "虚拟身份",
   navCountries: "国家",
   navCredits: "数据来源",
   langLabel: "语言",
 
-  heroTitle: "身份与地址生成器",
+  heroTitle: "虚拟身份",
   heroSub: "生成 34 个国家和地区的真实格式身份信息，涵盖姓名、地址、证件号、职业与在线资料，全部字段保持内部一致。",
   badgeNoSignup: "无需注册",
   badgeCountries: "34 个国家和地区",
@@ -166,14 +166,88 @@ const zh: Strings = {
   errCopyFailed: "复制失败，请手动选择文本",
 };
 
+const zhHant: Strings = {
+  brand: "雲棲數據",
+  navGenerate: "虛擬身份",
+  navCountries: "國家",
+  navCredits: "資料來源",
+  langLabel: "語言",
+
+  heroTitle: "虛擬身份",
+  heroSub: "產生 34 個國家與地區的真實格式身份資訊，涵蓋姓名、地址、證件號、職業與線上資料，所有欄位保持內部一致。",
+  badgeNoSignup: "免註冊",
+  badgeCountries: "34 個國家與地區",
+  badgeOffline: "本機產生",
+
+  selectCountry: "國家 / 地區",
+  selectDivision: "行政區",
+  selectGender: "性別",
+  genderAny: "隨機",
+  genderMale: "男",
+  genderFemale: "女",
+  divisionAny: "隨機",
+  generate: "產生",
+  regenerate: "換一個",
+
+  resultTitle: "產生結果",
+  copyAll: "複製全部",
+  copyJson: "複製 JSON",
+  downloadCsv: "匯出 CSV",
+
+  copy: "複製",
+  copied: "已複製",
+
+  groupIdentity: "身份資訊",
+  groupAddress: "地址與聯絡方式",
+  groupCredit: "信用卡資訊",
+  groupEducation: "教育資訊",
+  groupEmployment: "職業資訊",
+  groupLifestyle: "生活方式",
+  groupPersonal: "個人資訊",
+  groupOnline: "線上資料",
+  groupSocial: "社群媒體",
+
+  disclaimerTitle: "使用說明",
+  disclaimerBody: "本工具產生的全部資訊均為程式合成的虛擬資料，不對應任何真實個人、住址或帳戶。僅供軟體測試、表單示範與資料填充使用。",
+  formatOnly: "僅格式",
+  syntheticPostal: "無權威資料，依格式產生",
+  seedLabel: "種子",
+  seedHint: "相同種子可重現相同結果",
+  summaryAge: "年齡",
+  summaryDob: "出生日期",
+  emptyState: "選擇國家與行政區後點選「產生」",
+
+  shortcutHint: "按 R 重新產生，按 C 複製全部",
+
+  aboutTitle: "關於我們",
+  contactTitle: "聯絡我們",
+  privacyTitle: "隱私政策",
+  termsTitle: "服務條款",
+  creditsTitle: "資料來源",
+  countriesTitle: "支援的國家與地區",
+  countriesSub: "共 34 個國家與地區，涵蓋北美、歐洲、亞太、中東與拉丁美洲。",
+
+  footerNote: "所有資料均由程式合成，僅供測試使用。",
+  footerRights: "保留所有權利。",
+  linkAbout: "關於我們",
+  linkContact: "聯絡我們",
+  linkPrivacy: "隱私政策",
+  linkTerms: "服務條款",
+  linkCredits: "資料來源",
+  linkCountries: "國家列表",
+
+  errNoData: "尚無資料，請先產生",
+  errCopyFailed: "複製失敗，請手動選取文字",
+};
+
 const en: Strings = {
-  brand: "Aimei",
-  navGenerate: "Generator",
+  brand: "Yunqi Data",
+  navGenerate: "Virtual Identity",
   navCountries: "Countries",
   navCredits: "Data",
   langLabel: "Language",
 
-  heroTitle: "Identity & Address Generator",
+  heroTitle: "Virtual Identity",
   heroSub: "Generate realistic-format identity data for 34 countries and regions — names, addresses, national IDs, employment and online profiles, with every field internally consistent.",
   badgeNoSignup: "No sign-up",
   badgeCountries: "34 countries",
@@ -241,13 +315,13 @@ const en: Strings = {
 };
 
 const ja: Strings = {
-  brand: "Aimei",
-  navGenerate: "ジェネレーター",
+  brand: "雲栖データ",
+  navGenerate: "バーチャルID",
   navCountries: "国",
   navCredits: "データ",
   langLabel: "言語",
 
-  heroTitle: "アイデンティティ・住所ジェネレーター",
+  heroTitle: "バーチャル・アイデンティティ",
   heroSub: "34 の国と地域の実際の形式に沿った身元情報を生成します。氏名、住所、公的番号、職業、オンラインプロフィールまで、すべての項目が内部的に整合しています。",
   badgeNoSignup: "登録不要",
   badgeCountries: "34 の国と地域",
@@ -302,7 +376,7 @@ const ja: Strings = {
   countriesSub: "北米、ヨーロッパ、アジア太平洋、中東、ラテンアメリカの 34 の国と地域に対応しています。",
 
   footerNote: "すべてのデータはプログラムによる合成データであり、テスト専用です。",
-  footerRights: "All rights reserved.",
+  footerRights: "無断転載を禁じます。",
   linkAbout: "運営者情報",
   linkContact: "お問い合わせ",
   linkPrivacy: "プライバシー",
@@ -315,13 +389,13 @@ const ja: Strings = {
 };
 
 const ko: Strings = {
-  brand: "Aimei",
-  navGenerate: "생성기",
+  brand: "윈치 데이터",
+  navGenerate: "가상 신원",
   navCountries: "국가",
   navCredits: "데이터",
   langLabel: "언어",
 
-  heroTitle: "신원 및 주소 생성기",
+  heroTitle: "가상 신원",
   heroSub: "34개 국가와 지역의 실제 형식에 맞는 신원 정보를 생성합니다. 이름, 주소, 공적 번호, 직업, 온라인 프로필까지 모든 필드가 내부적으로 일관됩니다.",
   badgeNoSignup: "가입 불필요",
   badgeCountries: "34개 국가·지역",
@@ -376,7 +450,7 @@ const ko: Strings = {
   countriesSub: "북미, 유럽, 아시아·태평양, 중동, 라틴아메리카의 34개 국가와 지역을 지원합니다.",
 
   footerNote: "모든 데이터는 프로그램이 합성한 것으로 테스트 전용입니다.",
-  footerRights: "All rights reserved.",
+  footerRights: "모든 권리 보유.",
   linkAbout: "사이트 소개",
   linkContact: "문의하기",
   linkPrivacy: "개인정보",
@@ -388,7 +462,7 @@ const ko: Strings = {
   errCopyFailed: "복사 실패 — 텍스트를 직접 선택하세요",
 };
 
-export const STRINGS: Record<SiteLang, Strings> = { zh, en, ja, ko };
+export const STRINGS: Record<SiteLang, Strings> = { zh, "zh-hant": zhHant, en, ja, ko };
 
 export function t(lang: SiteLang): Strings {
   return STRINGS[lang] ?? STRINGS.en;

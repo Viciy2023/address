@@ -92,31 +92,51 @@ export const IS_PREVIEW = Boolean(cfBranch) && cfBranch !== cfProductionBranch;
 export const SITE = {
   url: SITE_URL,
   /** Brand name; also used as the JSON-LD organisation name. */
-  name: "Aimei",
+  name: {
+    zh: "云栖数据",
+    "zh-hant": "雲棲數據",
+    en: "Yunqi Data",
+    ja: "雲栖データ",
+    ko: "윈치 데이터",
+  },
   /** Product name shown in the header and titles. */
   product: {
-    zh: "身份与地址生成器",
-    en: "Identity & Address Generator",
-    ja: "アイデンティティ・住所ジェネレーター",
-    ko: "신원 및 주소 생성기",
+    zh: "虚拟身份",
+    "zh-hant": "虛擬身份",
+    en: "Virtual Identity",
+    ja: "バーチャル・アイデンティティ",
+    ko: "가상 신원",
   },
-  /** Contact address used on the contact page and in legal pages. */
-  email: "dulisikao1@hotmail.com",
+  /** Contact addresses used on the contact page and in legal pages. */
+  email: "cyuan52@gmail.com",
+  /** Telegram contact, surfaced in the footer and on the contact page. */
+  telegram: "https://t.me/cyuan52",
   /** AdSense publisher id. Empty means "no ads" — the banner is not rendered. */
   adsenseClient: import.meta.env.ADSENSE_CLIENT ?? process.env.ADSENSE_CLIENT ?? "",
   /** Cloudflare Web Analytics token. Empty means "no analytics". */
   analyticsToken: import.meta.env.CF_ANALYTICS_TOKEN ?? process.env.CF_ANALYTICS_TOKEN ?? "",
 } as const;
 
-/** UI languages, in switcher order. */
-export const LANGS = ["zh", "en", "ja", "ko"] as const;
+/**
+ * UI languages, in switcher order.
+ *
+ * `zh-hant` covers Traditional Chinese readers in Taiwan, Hong Kong and Macau.
+ * It is a separate locale rather than a script variant of `zh` because the
+ * wording differs, not only the glyphs.
+ *
+ * The key is lowercase because it is used verbatim as the URL segment;
+ * `LANG_TAG` supplies the correctly-cased BCP 47 value for `hreflang`. Serving
+ * both `/zh-hant/` and `/zh-Hant/` would create two URLs for one page.
+ */
+export const LANGS = ["zh", "zh-hant", "en", "ja", "ko"] as const;
 export type SiteLang = (typeof LANGS)[number];
 
 /** Default language lives at "/", others under "/<lang>/". */
 export const DEFAULT_LANG: SiteLang = "zh";
 
 export const LANG_LABEL: Record<SiteLang, string> = {
-  zh: "中文",
+  zh: "简体中文",
+  "zh-hant": "繁體中文",
   en: "English",
   ja: "日本語",
   ko: "한국어",
@@ -124,6 +144,7 @@ export const LANG_LABEL: Record<SiteLang, string> = {
 
 export const LANG_TAG: Record<SiteLang, string> = {
   zh: "zh-CN",
+  "zh-hant": "zh-Hant",
   en: "en",
   ja: "ja",
   ko: "ko",

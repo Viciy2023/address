@@ -112,7 +112,7 @@ if (cssGzip > LIMITS.initialCssGzip) {
  */
 const registrySrc = fs.readFileSync(path.join(ROOT, "src", "lib", "registry.ts"), "utf8");
 const countryCodes = [...registrySrc.matchAll(/^\s{4}code: "([A-Z]{2})",$/gm)].map((m) => m[1]);
-const LANGS = ["zh", "en", "ja", "ko"];
+const LANGS = ["zh", "zh-hant", "en", "ja", "ko"];
 
 const sitemapPath = path.join(DIST, "sitemap-0.xml");
 const sitemap = fs.existsSync(sitemapPath) ? fs.readFileSync(sitemapPath, "utf8") : "";

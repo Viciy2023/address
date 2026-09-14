@@ -22,6 +22,8 @@ interface Props {
 }
 
 const { lang, path, title, description, jsonLd = [] } = Astro.props;
+/** The home page is the only route whose path is "/". */
+const isHome = path === "/";
 const s = t(lang);
 
 const canonical = absolute(path, lang);
@@ -99,17 +101,26 @@ const ogImage = `${SITE.url}/og.png`;
     <header class="site-header">
       <div class="shell header-inner">
         <a class="brand" href={localize("/", lang)}>
-          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-mark" aria-hidden="true">
+            <!-- Inline glyph so the mark needs no request and scales cleanly. -->
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          </span>
           <span class="brand-text">
             <strong>{SITE.product[lang]}</strong>
-            <small>{SITE.name}</small>
+            <small>{SITE.name[lang]}</small>
           </span>
         </a>
 
         <nav class="nav" aria-label={s.navGenerate}>
-          <a href={localize("/", lang)}>{s.navGenerate}</a>
-          <a href={localize("/countries/", lang)}>{s.navCountries}</a>
-          <a href={localize("/credits/", lang)}>{s.navCredits}</a>
+          <a class="nav-link" href={localize("/", lang)} aria-current={isHome ? "page" : undefined}>
+            {s.navGenerate}
+          </a>
+          <a class="nav-link" href={localize("/countries/", lang)}>{s.navCountries}</a>
+          <a class="nav-link" href={localize("/credits/", lang)}>{s.navCredits}</a>
         </nav>
 
         <div class="header-tools">
@@ -146,31 +157,38 @@ const ogImage = `${SITE.url}/og.png`;
 
     <footer class="site-footer">
       <div class="shell">
-        <div class="footer-grid">
-          <div>
-            <p class="footer-brand">{SITE.product[lang]}</p>
-            <p class="muted footer-desc">{s.footerNote}</p>
-            <p class="faint footer-attr">
-              <a href={localize("/credits/", lang)}>{s.linkCredits}</a>
-            </p>
-          </div>
-          <nav aria-label={s.navGenerate}>
-            <p class="eyebrow">{s.navGenerate}</p>
+        <!-- Compact footer: brand and links on one line, legal on the next. -->
+        <div class="footer-main">
+          <p class="footer-brand">{SITE.name[lang]}</p>
+          <nav class="footer-links" aria-label={s.linkAbout}>
             <a href={localize("/", lang)}>{s.navGenerate}</a>
             <a href={localize("/countries/", lang)}>{s.linkCountries}</a>
             <a href={localize("/credits/", lang)}>{s.linkCredits}</a>
-          </nav>
-          <nav aria-label={s.linkAbout}>
-            <p class="eyebrow">{s.linkAbout}</p>
             <a href={localize("/about/", lang)}>{s.linkAbout}</a>
             <a href={localize("/contact/", lang)}>{s.linkContact}</a>
             <a href={localize("/privacy/", lang)}>{s.linkPrivacy}</a>
             <a href={localize("/terms/", lang)}>{s.linkTerms}</a>
           </nav>
         </div>
-        <div class="footer-bottom">
-          <p class="faint">© {new Date().getFullYear()} {SITE.name}. {s.footerRights}</p>
+
+        <div class="footer-contact">
+          <a class="contact-link" href={`mailto:${SITE.email}`}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="2" y="4" width="20" height="16" rx="2.5" />
+              <path d="m3 7 9 6 9-6" />
+            </svg>
+            {SITE.email}
+          </a>
+          <a class="contact-link" href={SITE.telegram} rel="noopener noreferrer" target="_blank">
+            <img src="/telegram.png" alt="" width="15" height="15" loading="lazy" decoding="async" />
+            Telegram
+          </a>
         </div>
+
+        <p class="footer-legal faint">
+          © {new Date().getFullYear()} {SITE.name[lang]}. {s.footerRights} · {s.footerNote}
+        </p>
       </div>
     </footer>
 
@@ -230,9 +248,13 @@ const ogImage = `${SITE.url}/og.png`;
   }
 
   .brand-mark {
-    width: 26px;
-    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
     background: var(--accent);
+    color: var(--on-accent);
     border-radius: var(--radius-sm);
     flex-shrink: 0;
     box-shadow: var(--shadow-xs);
@@ -263,21 +285,36 @@ const ogImage = `${SITE.url}/og.png`;
 
   .nav {
     display: none;
-    gap: 1.5rem;
+    gap: 0.25rem;
     margin-inline-start: auto;
   }
 
-  .nav a {
+  /*
+   * Nav links are pills rather than bare text, so the current page can be shown
+   * with a background instead of relying on colour alone.
+   */
+  .nav-link {
     font-size: 0.875rem;
     color: var(--text-muted);
     text-decoration: none;
-    transition: color 160ms ease;
-    min-height: 44px;
+    transition: color 160ms ease, background-color 160ms ease;
+    min-height: 40px;
     display: inline-flex;
     align-items: center;
-    padding: 0.5rem 0;
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--radius-sm);
   }
-  .nav a:hover { color: var(--text); }
+
+  .nav-link:hover {
+    color: var(--text);
+    background: var(--surface-2);
+  }
+
+  .nav-link[aria-current="page"] {
+    color: var(--accent);
+    background: var(--accent-soft);
+    font-weight: 500;
+  }
 
   @media (min-width: 860px) {
     .nav { display: flex; }
@@ -286,99 +323,123 @@ const ogImage = `${SITE.url}/og.png`;
   .header-tools {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.375rem;
     margin-inline-start: auto;
   }
 
   @media (min-width: 860px) {
-    .header-tools { margin-inline-start: 0.5rem; }
+    .header-tools { margin-inline-start: 0.75rem; }
   }
 
   .lang-select {
     width: auto;
     min-width: 6.5rem;
+    min-height: 40px;
     padding-block: 0.375rem;
-    padding-inline: 0.5rem 1.75rem;
+    padding-inline: 0.625rem 1.75rem;
     font-size: 0.8125rem;
-    min-height: 38px;
+    border-radius: var(--radius-sm);
     background-position: right 0.5rem center;
   }
 
   .theme-toggle {
     padding: 0.5rem;
-    min-height: 44px;
-    min-width: 44px;
+    min-height: 40px;
+    min-width: 40px;
     color: var(--text-muted);
+    border-radius: var(--radius-sm);
   }
 
   .theme-toggle .ico-moon { display: none; }
   :global(.dark) .theme-toggle .ico-sun { display: none; }
   :global(.dark) .theme-toggle .ico-moon { display: block; }
 
+  /*
+   * Footer: two lines on desktop, three on narrow screens.
+   *
+   * Line 1  brand + all navigation links, wrapping as needed.
+   * Line 2  contact methods (email, Telegram).
+   * Line 3  copyright and the synthetic-data notice.
+   *
+   * The previous three-column grid spent a lot of vertical space on eight links
+   * and a short note; a single wrapped row reads better and leaves the page
+   * content as the focus.
+   */
   .site-footer {
-    margin-top: 5rem;
+    margin-top: 4rem;
     border-top: 1px solid var(--border);
-    padding-block: 3rem 2rem;
+    padding-block: 2rem 1.5rem;
   }
 
-  .footer-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 2rem;
-  }
-
-  @media (min-width: 720px) {
-    .footer-grid { grid-template-columns: 2fr 1fr 1fr; }
+  .footer-main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.5rem;
   }
 
   .footer-brand {
     font-weight: 600;
     letter-spacing: -0.02em;
-    margin: 0 0 0.375rem;
+    margin: 0;
+    font-size: 0.9375rem;
   }
 
-  .footer-desc {
+  .footer-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 1.125rem;
+    margin-inline-start: auto;
+  }
+
+  .footer-links a {
     font-size: 0.8125rem;
-    margin: 0 0 0.75rem;
-    max-width: 34ch;
-  }
-
-  .footer-attr { font-size: 0.8125rem; margin: 0; }
-  .footer-attr a {
-    color: var(--accent);
+    color: var(--text-muted);
     text-decoration: none;
+    /* 44px minimum touch target without adding visual weight. */
+    min-height: 44px;
     display: inline-flex;
     align-items: center;
-    min-height: 44px;
-    padding: 0.5rem 0;
+    transition: color 140ms ease;
   }
-  .footer-attr a:hover { text-decoration: underline; }
 
-  .footer-grid nav {
+  .footer-links a:hover { color: var(--text); }
+
+  /* Contact row: email and Telegram. */
+  .footer-contact {
     display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 1.25rem;
+    margin-top: 0.25rem;
   }
 
-  .footer-grid nav a {
+  .contact-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4375rem;
     font-size: 0.8125rem;
     color: var(--text-muted);
     text-decoration: none;
     min-height: 44px;
-    display: inline-flex;
-    align-items: center;
-    padding: 0.5rem 0;
+    transition: color 140ms ease;
   }
 
-  .footer-grid nav a:hover { color: var(--text); }
+  .contact-link:hover { color: var(--accent); }
 
-  .footer-bottom {
-    margin-top: 2.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--border);
+  .contact-link img {
+    display: block;
+    width: 15px;
+    height: 15px;
+    object-fit: contain;
+  }
+
+  .footer-legal {
+    margin: 0.5rem 0 0;
     font-size: 0.75rem;
+    line-height: 1.6;
   }
-  .footer-bottom p { margin: 0; }
 
   .sr-only {
     position: absolute;

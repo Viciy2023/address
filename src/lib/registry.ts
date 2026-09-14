@@ -22,7 +22,7 @@
  */
 
 /** Interface languages the site is translated into. */
-export type Lang = "zh" | "en" | "ja" | "ko";
+export type Lang = "zh" | "zh-hant" | "en" | "ja" | "ko";
 
 /**
  * Languages a record may be written in.
@@ -43,6 +43,8 @@ export type DataLang = Lang | "ru" | "th" | "vi" | "ar" | "he" | "tr" | "pt" | "
  */
 export interface LocalizedText {
   zh: string;
+  /** Traditional Chinese, used by the zh-hant interface. */
+  "zh-hant"?: string;
   en: string;
   ja: string;
   ko: string;

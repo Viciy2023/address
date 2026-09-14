@@ -144,6 +144,35 @@ export const ABOUT: Copy = {
       },
     ],
   },
+  "zh-hant": {
+    title: "關於我們",
+    intro: "本站提供一個完全在瀏覽器本機執行的身份與地址產生工具，面向軟體開發、測試與資料填充情境。",
+    sections: [
+      {
+        heading: "我們做什麼",
+        body: [
+          "我們把分散在各國的地址格式規則、行政區劃資料、郵遞區號規則與證件號碼格式整理成一份結構化資料集，讓開發者可以在同一個地方產生格式正確、內部一致的測試資料。",
+          "所有產生過程都在你的瀏覽器中完成。不會有請求傳送到伺服器，沒有帳號，也沒有使用紀錄。",
+        ],
+      },
+      {
+        heading: "資料從何而來",
+        body: [
+          "行政區劃、城市、人口與郵遞區號來自 GeoNames，採用 CC-BY 4.0 授權。姓名資料庫來自 @faker-js/faker，採用 MIT 授權。",
+          "我們在此向這些專案的維護者致謝。完整的來源清單與授權條款請見「資料來源」頁面。",
+        ],
+      },
+      {
+        heading: "我們的原則",
+        body: [
+          "- 資料與程式分離：各國規則以 JSON 維護，調整一個國家的格式不需要更動產生邏輯。",
+          "- 一致性優先：城市、行政區與郵遞區號始終來自同一筆紀錄，絕不會互相矛盾。",
+          "- 可重現：相同的種子必然產生相同的結果，便於自動化測試。",
+          "- 誠實標註：無法取得權威資料的欄位會明確標註，不會假裝資料是真實的。",
+        ],
+      },
+    ],
+  },
 };
 
 export const CONTACT: Copy = {
@@ -153,7 +182,7 @@ export const CONTACT: Copy = {
     sections: [
       {
         heading: "联系方式",
-        body: ["电子邮件是我们唯一的联系方式。请在邮件标题中简要说明来意，以便我们更快处理。"],
+        body: ["请通过以下任一方式与我们联系。若是邮件，请在标题中简要说明来意，以便我们更快处理。", "- 电子邮箱：cyuan52@gmail.com", "- Telegram：@cyuan52"],
       },
       {
         heading: "我们最想收到的反馈",
@@ -176,7 +205,7 @@ export const CONTACT: Copy = {
     sections: [
       {
         heading: "How to reach us",
-        body: ["Email is our only support channel. A concise subject line telling us what the message is about helps us respond faster."],
+        body: ["Reach us through either channel below. If you write, a concise subject line telling us what the message is about helps us respond faster.", "- Email: cyuan52@gmail.com", "- Telegram: @cyuan52"],
       },
       {
         heading: "Feedback we are most interested in",
@@ -199,7 +228,7 @@ export const CONTACT: Copy = {
     sections: [
       {
         heading: "連絡方法",
-        body: ["お問い合わせはメールのみで承っています。件名にご用件を簡潔にご記入いただくと、対応が早くなります。"],
+        body: ["以下のいずれかの方法でご連絡ください。メールの場合、件名に用件を簡潔にご記入いただけると迅速に対応できます。", "- メール：cyuan52@gmail.com", "- Telegram：@cyuan52"],
       },
       {
         heading: "特にお待ちしているご報告",
@@ -222,7 +251,7 @@ export const CONTACT: Copy = {
     sections: [
       {
         heading: "연락 방법",
-        body: ["이메일이 유일한 문의 채널입니다. 제목에 용건을 간단히 적어 주시면 더 빠르게 처리할 수 있습니다."],
+        body: ["아래 두 가지 방법 중 편한 쪽으로 연락해 주세요. 이메일인 경우 제목에 용건을 간단히 적어 주시면 더 빠르게 답변드립니다.", "- 이메일: cyuan52@gmail.com", "- Telegram: @cyuan52"],
       },
       {
         heading: "특히 환영하는 제보",
@@ -236,6 +265,38 @@ export const CONTACT: Copy = {
       {
         heading: "답변 시간",
         body: ["보통 2~3 영업일 내에 답변드립니다. 소규모 개인 프로젝트이므로 늦어질 수 있는 점 양해 부탁드립니다."],
+      },
+    ],
+  },
+  "zh-hant": {
+    title: "聯絡我們",
+    intro: "若你對本站的資料、授權或使用方式有任何疑問，歡迎與我們聯絡。",
+    sections: [
+      {
+        heading: "電子郵件",
+        body: [
+          "請透過以下任一方式與我們聯絡。若是郵件，請在標題中簡要說明來意，以便我們更快處理。",
+          "- 電子郵件：cyuan52@gmail.com",
+          "- Telegram：@cyuan52",
+        ],
+      },
+      {
+        heading: "Telegram",
+        body: [
+          "若你偏好即時通訊，也可以透過 Telegram 與我們聯絡：@cyuan52。",
+        ],
+      },
+      {
+        heading: "授權與轉載",
+        body: [
+          "本站程式碼採用 MIT 授權，內含的資料集各自採用其原始授權。轉載或再使用前請先確認對應的授權條款。",
+        ],
+      },
+      {
+        heading: "問題回報",
+        body: [
+          "若你發現某個國家或地區的產生結果有誤，請附上該筆紀錄的種子與國家代碼，這能讓我們精確重現問題。",
+        ],
       },
     ],
   },
@@ -432,6 +493,40 @@ export const TERMS: Copy = {
       {
         heading: "6. 약관의 변경",
         body: ["본 약관은 수시로 개정될 수 있습니다. 개정 후에도 사이트 이용을 계속하면 개정된 약관에 동의한 것으로 봅니다."],
+      },
+    ],
+  },
+  "zh-hant": {
+    title: "服務條款",
+    intro: "使用本站即表示你同意以下條款。",
+    sections: [
+      {
+        heading: "服務說明",
+        body: [
+          "本站提供程式合成的虛擬身份與地址資料，供軟體開發、測試與表單示範使用。",
+        ],
+      },
+      {
+        heading: "使用限制",
+        body: [
+          "你不得將本站產生的資料用於任何違法目的，包括但不限於：",
+          "- 冒充他人或從事身分詐欺。",
+          "- 註冊需要真實身分驗證的服務。",
+          "- 規避任何平台的身分查核機制。",
+          "- 從事任何違反當地法律的行為。",
+        ],
+      },
+      {
+        heading: "資料性質",
+        body: [
+          "所有資料均由演算法合成，不對應任何真實個人、住址、電話或帳戶。證件號碼雖符合官方格式與檢查碼規則，但並非由任何政府機關核發。",
+        ],
+      },
+      {
+        heading: "免責聲明",
+        body: [
+          "本站依「現狀」提供，不對資料的適用性作任何保證。使用者須自行承擔使用本站資料的一切風險與責任。",
+        ],
       },
     ],
   },

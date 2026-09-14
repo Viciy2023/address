@@ -40,7 +40,7 @@ if (ON_PAGES && SITE_URL_AUTO) {
  */
 function routeMeta(pathname) {
   // Strip the language prefix and trailing slash to get the language-relative path.
-  const withoutLang = pathname.replace(/^\/(en|ja|ko)(?=\/|$)/, "");
+  const withoutLang = pathname.replace(/^\/(zh-hant|en|ja|ko)(?=\/|$)/, "");
   const rel = withoutLang.replace(/^\/+|\/+$/g, "");
 
   const match = ROUTES.find((r) => r.path === rel);
@@ -76,7 +76,7 @@ export default defineConfig({
     sitemap({
       i18n: {
         defaultLocale: "zh",
-        locales: { zh: "zh-CN", en: "en", ja: "ja", ko: "ko" },
+        locales: { zh: "zh-CN", "zh-hant": "zh-Hant", en: "en", ja: "ja", ko: "ko" },
       },
       serialize(item) {
         const { priority, changefreq } = routeMeta(new URL(item.url).pathname);

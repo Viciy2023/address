@@ -22,7 +22,9 @@ export function buildPrivacy(lang: SiteLang): PageCopy {
   const thirdParties: string[] = [];
   if (hasAnalytics) {
     thirdParties.push(
-      lang === "zh"
+      lang === "zh-hant"
+        ? "Cloudflare Web Analytics：用於統計造訪量。它不設定 Cookie，不蒐集個人資訊，也不進行跨站追蹤。"
+        : lang === "zh"
         ? "Cloudflare Web Analytics：用于统计访问量。它不设置 Cookie，不采集个人信息，不跨站追踪。"
         : lang === "ja"
           ? "Cloudflare Web Analytics：アクセス解析に使用します。Cookie を設定せず、個人情報を収集せず、クロスサイト追跡も行いません。"
@@ -33,7 +35,9 @@ export function buildPrivacy(lang: SiteLang): PageCopy {
   }
   if (hasAds) {
     thirdParties.push(
-      lang === "zh"
+      lang === "zh-hant"
+        ? "Google AdSense：用於顯示廣告。Google 及其合作夥伴可能使用 Cookie，依據你先前造訪本站或其他網站的記錄投放廣告。你可以透過 Google 廣告設定選擇停用個人化廣告。"
+        : lang === "zh"
         ? "Google AdSense：用于展示广告。Google 及其合作伙伴可能使用 Cookie 基于你此前访问本站或其他网站的记录投放广告。你可以通过 Google 广告设置选择停用个性化广告。"
         : lang === "ja"
           ? "Google AdSense：広告配信に使用します。Google とそのパートナーは Cookie を使用し、本サイトや他サイトへの過去のアクセスに基づいて広告を配信する場合があります。Google の広告設定でパーソナライズ広告を無効にできます。"
@@ -44,7 +48,9 @@ export function buildPrivacy(lang: SiteLang): PageCopy {
   }
   if (thirdParties.length === 0) {
     thirdParties.push(
-      lang === "zh"
+      lang === "zh-hant"
+        ? "本站目前未接入任何第三方分析或廣告服務，因此不會向任何第三方傳輸資料。"
+        : lang === "zh"
         ? "本站当前未接入任何第三方分析或广告服务，因此不向任何第三方传输数据。"
         : lang === "ja"
           ? "現在、第三者による解析サービスや広告サービスは一切導入していないため、第三者へのデータ送信はありません。"
@@ -52,6 +58,58 @@ export function buildPrivacy(lang: SiteLang): PageCopy {
             ? "현재 제3자 분석 또는 광고 서비스를 사용하지 않으므로 제3자에게 데이터를 전송하지 않습니다."
             : "No third-party analytics or advertising service is currently integrated, so no data is transmitted to any third party.",
     );
+  }
+
+  if (lang === "zh-hant") {
+    return {
+      title: "隱私政策",
+      intro: "本政策說明本站如何處理你的資訊。核心事實很簡單：產生過程完全在你的瀏覽器內完成。",
+      sections: [
+        {
+          heading: "1. 我們不蒐集什麼",
+          body: [
+            "這是最重要的一節：",
+            "- 你產生的所有身份與地址資料都只存在於你的瀏覽器中，從不上傳到任何伺服器。",
+            "- 本站沒有帳號系統，不要求你註冊或登入。",
+            "- 我們不記錄你產生了哪些資料，也不保存產生歷史。",
+          ],
+        },
+        {
+          heading: "2. 本機儲存",
+          body: [
+            "本站使用瀏覽器本機儲存（localStorage）保存兩項設定：你的深色／淺色主題偏好，以及語言偏好。這些資料只存在於你的裝置上，你可以隨時清除瀏覽器資料將其刪除。",
+          ],
+        },
+        {
+          heading: "3. 第三方服務",
+          body: thirdParties,
+        },
+        {
+          heading: "4. 伺服器日誌",
+          body: [
+            "本站以靜態檔案形式代管。代管服務商可能會記錄標準的存取日誌（IP 位址、時間、請求路徑、User-Agent），用於安全防護與流量統計。這些日誌由代管商依其自身隱私政策處理，我們無法將其與特定個人關聯。",
+          ],
+        },
+        {
+          heading: "5. 兒童隱私",
+          body: ["本站不面向 13 歲以下兒童，也不會有意識地蒐集兒童的任何資訊。"],
+        },
+        {
+          heading: "6. 你的權利",
+          body: [
+            "由於我們不蒐集可辨識你個人身份的資料，通常不存在需要匯出或刪除的個人資料。若你對本政策有疑問，可透過下方信箱與我們聯絡。",
+          ],
+        },
+        {
+          heading: "7. 政策變更",
+          body: ["若本政策發生實質性變更，我們會在本頁更新內容並修改頁面頂部的日期。"],
+        },
+        {
+          heading: "8. 聯絡方式",
+          body: [`如有隱私相關問題，請聯絡：${email}`],
+        },
+      ],
+    };
   }
 
   if (lang === "zh") {
