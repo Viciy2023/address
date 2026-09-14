@@ -273,14 +273,14 @@
   {/if}
 
   <!--
-    Controls: everything on one line.
-    Domain, prefix, New address, the auto-refresh toggle, Refresh, Clear inbox
-    and the disclaimer all share a single wrapping row. On a desktop the whole
-    set fits on one line, as on haoweichi.com/mail; on narrow screens the row
-    wraps instead of collapsing into a tall stack.
+    Controls, two rows.
+    Row 1: domain, prefix and the three action buttons, bottom-aligned so the
+    buttons sit on the same line as the input boxes (bottom-aligned rather than
+    centred because the fields carry labels above them and the buttons do not).
+    Row 2: the auto-refresh toggle and the disclaimer.
   -->
   <section class="card controls" aria-label={m.newAddress}>
-    <div class="controls-row">
+    <div class="controls-main">
       <div class="field field-domain">
         <label class="field-label" for="mail-domain">{m.domainLabel}</label>
         <select id="mail-domain" class="select" bind:value={domain} disabled={busy}>
@@ -305,7 +305,7 @@
       </div>
 
       <button
-        class="btn btn-secondary generate"
+        class="btn btn-primary"
         type="button"
         disabled={busy || !settings || !prefixValid}
         on:click={newAddress}
@@ -313,24 +313,24 @@
         {busy ? m.loading : m.newAddress}
       </button>
 
-      <label class="toggle">
-        <input type="checkbox" bind:checked={autoRefresh} />
-        <span>{m.autoRefresh}</span>
-      </label>
-
-      <button class="btn btn-ghost" type="button" disabled={busy || !mailbox} on:click={() => refresh()}>
+      <button class="btn btn-primary" type="button" disabled={busy || !mailbox} on:click={() => refresh()}>
         {m.refresh}
       </button>
       <button
-        class="btn btn-ghost"
+        class="btn btn-primary"
         type="button"
         disabled={busy || !mailbox || !settings?.enableUserDeleteEmail}
         on:click={doClear}
       >
         {busy ? m.clearing : m.clearInbox}
       </button>
+    </div>
 
-      <!-- The disclaimer trails the controls on the same line. -->
+    <div class="controls-secondary">
+      <label class="toggle">
+        <input type="checkbox" bind:checked={autoRefresh} />
+        <span>{m.autoRefresh}</span>
+      </label>
       <p class="hint faint controls-note">{m.disclaimer}</p>
     </div>
 
@@ -471,24 +471,24 @@
   /* ------------------------------------------------------------ controls */
 
   /*
-   * Everything on one line.
+   * Two rows.
    *
-   * The controls are a single wrapping flex row: domain, prefix, New address,
-   * the auto-refresh toggle, Refresh, Clear inbox and the disclaimer. At desktop
-   * widths they fit on one line, matching haoweichi.com/mail. The disclaimer
-   * takes the remaining space (`flex: 1`) so it sits on that same line instead
-   * of dropping to its own row; when the row wraps on narrow screens it simply
-   * moves to the next line, which is unavoidable.
+   * Row 1 holds the domain, prefix and the three action buttons. It is a
+   * wrapping flex row aligned to `flex-end`: the fields have labels above them
+   * and the buttons do not, so bottom alignment is what puts the buttons on the
+   * same horizontal line as the input boxes.
+   *
+   * Row 2 holds the auto-refresh toggle and the disclaimer.
    */
   .controls {
     padding: 1.25rem;
   }
 
-  .controls-row {
+  .controls-main {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 0.625rem 0.75rem;
+    align-items: flex-end;
+    gap: 0.75rem;
   }
 
   .field {
@@ -497,25 +497,26 @@
     flex: 0 1 auto;
   }
 
-  .field-domain { flex-basis: 10rem; }
-  .field-prefix { flex-basis: 8rem; }
+  .field-domain { flex-basis: 12rem; }
+  .field-prefix { flex-basis: 10rem; }
 
   .select,
   .input { width: 100%; }
 
-  .generate { white-space: nowrap; }
-
   /*
-   * The disclaimer trails the row as the last flex item. Its basis is 0 so it
-   * claims only the space the six controls leave over, which keeps it on the
-   * same visual line as them; the text wraps inside its own column rather than
-   * pushing to a new row.
+   * Row 2: toggle then disclaimer, on one line with the toggle pinned left.
+   * `margin-left: auto` on the disclaimer would split them apart; instead they
+   * sit together, separated by the same gap as the row above.
    */
-  .controls-note {
-    flex: 1 1 0;
-    min-width: 7rem;
-    margin: 0;
+  .controls-secondary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    margin-top: 0.875rem;
   }
+
+  .controls-note { margin: 0; }
 
   /* Prefix validation error, shown only when the prefix is invalid. */
   .controls-warn {
