@@ -1132,5 +1132,138 @@ console.log("\n=== mailbox helpers ===");
   }
 }
 
+console.log("\n=== card generator ===");
+{
+  /*
+   * The card generator is pure and offline, so it can be exercised fully
+   * here. Three things must hold: every number passes Luhn and has the length
+   * its network actually issues; a chosen network is what detectNetwork
+   * reports for the result; and completion never alters the digits the visitor
+   * typed.
+   */
+  const { NETWORKS, NETWORK_ORDER, detectNetwork } = await import("../src/lib/card/networks.ts");
+  const { generateCard, generateCards, completeCard, seedForInput } = await import("../src/lib/card/generate.ts");
+  const { isValidLuhn, luhnCheckDigit } = await import("../src/lib/card/luhn.ts");
+
+  // Luhn helper against known-valid published test numbers.
+  const knownValid = [
+    "4111111111111111",
+    "4242424242424242",
+    "5555555555554444",
+    "378282246310005",
+    "6011111111111117",
+    "30569309025904",
+  ];
+  let luhnBad = 0;
+  for (const n of knownValid) if (!isValidLuhn(n)) { luhnBad++; console.error(`  FAIL: ${n} should be Luhn-valid`); }
+  // A single perturbation must break validity.
+  for (const n of knownValid) {
+    const flipped = n.slice(0, -1) + String((Number(n[n.length - 1]) + 1) % 10);
+    if (isValidLuhn(flipped)) { luhnBad++; console.error(`  FAIL: perturbed ${flipped} still passed Luhn`); }
+  }
+  check(luhnBad === 0, `${luhnBad} Luhn helper results were wrong`);
+  console.log(`  Luhn helper: ${knownValid.length} known-valid numbers accepted, all perturbations rejected`);
+
+  // Every network, many seeds: valid, correct length, self-detecting.
+  let netBad = 0;
+  let netChecked = 0;
+  for (const id of NETWORK_ORDER) {
+    const net = NETWORKS[id];
+    for (let s = 0; s < 60; s++) {
+      const c = generateCard(id, s * 7919 + 13);
+      netChecked++;
+      if (!isValidLuhn(c.number)) { netBad++; if (netBad <= 5) console.error(`  FAIL: ${id} seed ${s} produced a non-Luhn number ${c.number}`); }
+      if (!net.lengths.includes(c.number.length)) { netBad++; if (netBad <= 5) console.error(`  FAIL: ${id} produced length ${c.number.length}, not in ${net.lengths}`); }
+      if (detectNetwork(c.number) !== id) { netBad++; if (netBad <= 5) console.error(`  FAIL: ${id} number ${c.number} detected as ${detectNetwork(c.number)}`); }
+      if (c.cvv.length !== net.cvv) { netBad++; if (netBad <= 5) console.error(`  FAIL: ${id} cvv length ${c.cvv.length}, expected ${net.cvv}`); }
+    }
+  }
+  check(netBad === 0, `${netBad}/${netChecked} generated cards were malformed`);
+  console.log(`  ${netChecked - netBad}/${netChecked} generated cards are Luhn-valid with the right length and network`);
+
+  // Random choice must actually reach every network across enough draws.
+  const seen = new Set<string>();
+  for (let s = 0; s < 400; s++) seen.add(generateCard("random", s).network);
+  check(seen.size === NETWORK_ORDER.length, `random choice only reached ${seen.size}/${NETWORK_ORDER.length} networks`);
+  console.log(`  random choice reached ${seen.size}/${NETWORK_ORDER.length} networks`);
+
+  // Completion preserves the typed digits and yields a valid number.
+  const partials: [string, string][] = [
+    ["4", "4"],
+    ["4111", "4111"],
+    ["4111 1111", "41111111"],
+    ["4111xxxxxxxxxxxx", "4111"],
+    ["37xxxxxxxxxxxxx", "37"],
+    ["62xxxxxxxxxxxxxxxx", "62"],
+    ["4111111111111111", "4111111111111111"],
+  ];
+  let compBad = 0;
+  for (const [input, typed] of partials) {
+    const r = completeCard(input, seedForInput(input));
+    if (!r.card) { compBad++; console.error(`  FAIL: completeCard(${JSON.stringify(input)}) returned ${r.error}`); continue; }
+    if (!isValidLuhn(r.card.number)) { compBad++; console.error(`  FAIL: completed ${r.card.number} is not Luhn-valid`); }
+    if (!r.card.number.startsWith(typed)) { compBad++; console.error(`  FAIL: completeCard(${JSON.stringify(input)}) dropped typed digits: ${r.card.number}`); }
+    if (r.card.number.length < 12 || r.card.number.length > 19) { compBad++; console.error(`  FAIL: completed length ${r.card.number.length} out of range`); }
+  }
+  check(compBad === 0, `${compBad}/${partials.length} completions were wrong`);
+  console.log(`  ${partials.length - compBad}/${partials.length} partial numbers completed, typed digits preserved`);
+
+  // Refusals: a mask that cannot reach card length, and an unknown prefix.
+  const refusals: [string, string][] = [
+    ["", "empty"],
+    ["54**", "tooShort"],
+    ["99", "unknownPrefix"],
+    ["abcd", "badChars"],
+  ];
+  let refBad = 0;
+  for (const [input, want] of refusals) {
+    const r = completeCard(input, 1);
+    if (r.card || r.error !== want) { refBad++; console.error(`  FAIL: completeCard(${JSON.stringify(input)}) -> ${r.error}, expected ${want}`); }
+  }
+  check(refBad === 0, `${refBad}/${refusals.length} invalid inputs were not refused correctly`);
+  console.log(`  ${refusals.length - refBad}/${refusals.length} invalid inputs refused with the right reason`);
+
+  /*
+   * A completed card's label must match what the finished number detects as.
+   * "6222" is UnionPay at two digits but the finished 6222xx number can fall in
+   * the ISO block assigned to Discover; the label has to follow the number.
+   */
+  let labelBad = 0;
+  for (const input of ["62", "6222", "6222xxxxxxxxxxxx", "622126xxxxxxxxxx", "6"]) {
+    const r = completeCard(input, seedForInput(input));
+    if (!r.card) continue;
+    const detected = detectNetwork(r.card.number);
+    if (detected && detected !== r.card.network) {
+      labelBad++;
+      console.error(`  FAIL: ${r.card.number} labelled ${r.card.network} but detects as ${detected}`);
+    }
+  }
+  check(labelBad === 0, `${labelBad} completed cards were labelled inconsistently`);
+  console.log("  completed cards are labelled by their finished number");
+
+  // Determinism.
+  const d1 = generateCard("Visa", 999).number;
+  const d2 = generateCard("Visa", 999).number;
+  const d3 = completeCard("4111xxxxxxxxxxxx", 777).card?.number;
+  const d4 = completeCard("4111xxxxxxxxxxxx", 777).card?.number;
+  check(d1 === d2 && d3 === d4 && Boolean(d3), "card generation is not deterministic");
+  console.log("  generation is deterministic for a fixed seed");
+
+  // Batch: the right count, no duplicates within a batch.
+  const batch = generateCards("random", 20, 4242);
+  const unique = new Set(batch.map((c) => c.number));
+  check(batch.length === 20 && unique.size === 20, `batch of 20 had ${unique.size} distinct numbers`);
+  console.log(`  batch of ${batch.length}: ${unique.size} distinct numbers`);
+
+  // Check-digit helper agrees with append-then-validate.
+  let cdBad = 0;
+  for (const n of knownValid) {
+    const body = n.slice(0, -1);
+    if (String(luhnCheckDigit(body)) !== n[n.length - 1]) { cdBad++; console.error(`  FAIL: check digit for ${body} was ${luhnCheckDigit(body)}, expected ${n[n.length - 1]}`); }
+  }
+  check(cdBad === 0, `${cdBad} check digits were computed wrongly`);
+  console.log("  check-digit computation matches known-valid numbers");
+}
+
 console.log(`\n${failures === 0 ? "PASS" : "FAIL"} — ${checks} checks, ${failures} failures`);
 process.exit(failures === 0 ? 0 : 1);

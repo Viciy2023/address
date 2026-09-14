@@ -9,6 +9,7 @@ import "../styles/global.css";
 import { SITE, IS_PREVIEW, LANGS, LANG_LABEL, LANG_TAG, type SiteLang, localize, absolute } from "../config";
 import { t } from "../i18n/strings";
 import { mailStrings } from "../i18n/mail";
+import { cardStrings } from "../i18n/card";
 import Integrations from "../components/Integrations.astro";
 import ConsentBanner from "../components/ConsentBanner.astro";
 
@@ -27,6 +28,8 @@ const { lang, path, title, description, jsonLd = [] } = Astro.props;
 const isHome = path === "/";
 const mailNav = mailStrings(lang).nav;
 const isMail = path === "/mail/";
+const cardNav = cardStrings(lang).nav;
+const isCard = path === "/credit-card/";
 const s = t(lang);
 
 const canonical = absolute(path, lang);
@@ -125,6 +128,9 @@ const ogImage = `${SITE.url}/og.png`;
           <a class="nav-link" href={localize("/mail/", lang)} aria-current={isMail ? "page" : undefined}>
             {mailNav}
           </a>
+          <a class="nav-link" href={localize("/credit-card/", lang)} aria-current={isCard ? "page" : undefined}>
+            {cardNav}
+          </a>
           <a class="nav-link" href={localize("/countries/", lang)}>{s.navCountries}</a>
           <a class="nav-link" href={localize("/credits/", lang)}>{s.navCredits}</a>
         </nav>
@@ -183,6 +189,7 @@ const ogImage = `${SITE.url}/og.png`;
           <nav class="footer-links" aria-label={s.linkAbout}>
             <a href={localize("/", lang)}>{s.navGenerate}</a>
             <a href={localize("/mail/", lang)}>{mailNav}</a>
+            <a href={localize("/credit-card/", lang)}>{cardNav}</a>
             <a href={localize("/countries/", lang)}>{s.linkCountries}</a>
             <a href={localize("/credits/", lang)}>{s.linkCredits}</a>
             <a href={localize("/about/", lang)}>{s.linkAbout}</a>

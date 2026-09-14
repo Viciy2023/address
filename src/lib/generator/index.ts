@@ -18,6 +18,7 @@
 import { Rng } from "./rng.js";
 import { makePostal } from "./postal.js";
 import { makeNationalId } from "./identifiers.js";
+import { luhnCheckDigit } from "../card/luhn.js";
 import type { CountrySpec, DataLang, LocalizedText, Lang } from "../registry.js";
 import {
   AU_STATE,
@@ -318,7 +319,15 @@ function genderLabel(gender: "male" | "female"): L10n {
     : l10n("女", "Female", "女性", "여성");
 }
 
-/** Luhn-valid card number for the given issuer. */
+/**
+ * Luhn-valid card number for the given issuer.
+ *
+ * The check-digit arithmetic is shared with the standalone card generator
+ * (`lib/card/luhn.ts`) so there is one implementation of Luhn in the codebase.
+ * Prefixes and lengths stay local here because the identity generator only
+ * needs one plausible number per record; the card generator owns the wider
+ * prefix tables.
+ */
 function makeCardNumber(issuer: string, rng: Rng): string {
   const prefix = {
     Visa: "4",
@@ -332,20 +341,7 @@ function makeCardNumber(issuer: string, rng: Rng): string {
 
   const total = issuer === "Amex" ? 15 : 16;
   const body = prefix + rng.digits(total - prefix.length - 1);
-
-  let sum = 0;
-  const digits = body.split("").map(Number);
-  for (let i = digits.length - 1; i >= 0; i--) {
-    let v = digits[digits.length - 1 - i];
-    // Double every second digit from the right.
-    if (i % 2 === 0) {
-      v *= 2;
-      if (v > 9) v -= 9;
-    }
-    sum += v;
-  }
-  const check = (10 - (sum % 10)) % 10;
-  const full = body + String(check);
+  const full = body + String(luhnCheckDigit(body));
 
   if (issuer === "Amex") return `${full.slice(0, 4)} ${full.slice(4, 10)} ${full.slice(10)}`;
   return full.replace(/(.{4})/g, "$1 ").trim();
