@@ -157,9 +157,16 @@ const ogImage = `${SITE.url}/og.png`;
 
     <footer class="site-footer">
       <div class="shell">
-        <!-- Compact footer: brand and links on one line, legal on the next. -->
-        <div class="footer-main">
-          <p class="footer-brand">{SITE.name[lang]}</p>
+        <!--
+          Footer layout:
+            row 1  copyright · synthetic-data notice, and the navigation links
+                   inline on the same line (wrapping only when there is no room)
+            row 2  the Telegram mark, pinned bottom-right
+        -->
+        <div class="footer-legal-row">
+          <p class="footer-legal faint">
+            © {new Date().getFullYear()} {SITE.name[lang]}. {s.footerRights} · {s.footerNote}
+          </p>
           <nav class="footer-links" aria-label={s.linkAbout}>
             <a href={localize("/", lang)}>{s.navGenerate}</a>
             <a href={localize("/countries/", lang)}>{s.linkCountries}</a>
@@ -171,24 +178,17 @@ const ogImage = `${SITE.url}/og.png`;
           </nav>
         </div>
 
-        <div class="footer-contact">
-          <a class="contact-link" href={`mailto:${SITE.email}`}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="2" y="4" width="20" height="16" rx="2.5" />
-              <path d="m3 7 9 6 9-6" />
-            </svg>
-            {SITE.email}
-          </a>
-          <a class="contact-link" href={SITE.telegram} rel="noopener noreferrer" target="_blank">
-            <img src="/telegram.png" alt="" width="15" height="15" loading="lazy" decoding="async" />
-            Telegram
+        <div class="footer-mark-row">
+          <a
+            class="contact-link"
+            href={SITE.telegram}
+            rel="noopener noreferrer"
+            target="_blank"
+            aria-label="Telegram"
+          >
+            <img src="/telegram.png" alt="Telegram" width="40" height="40" loading="lazy" decoding="async" />
           </a>
         </div>
-
-        <p class="footer-legal faint">
-          © {new Date().getFullYear()} {SITE.name[lang]}. {s.footerRights} · {s.footerNote}
-        </p>
       </div>
     </footer>
 
@@ -260,10 +260,18 @@ const ogImage = `${SITE.url}/og.png`;
     box-shadow: var(--shadow-xs);
   }
 
+  /*
+   * Brand: the product name and the company name sit on one line, separated by
+   * a hairline dot. They were stacked, which read as two unrelated labels and
+   * wrapped awkwardly in the longer languages (バーチャル・アイデンティティ).
+   */
   .brand-text {
     display: flex;
-    flex-direction: column;
-    line-height: 1.15;
+    align-items: baseline;
+    gap: 0.4375rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    min-width: 0;
   }
 
   .brand-text strong {
@@ -272,15 +280,27 @@ const ogImage = `${SITE.url}/og.png`;
     letter-spacing: -0.02em;
   }
 
-  .brand-text small {
-    font-size: 0.6875rem;
-    color: var(--text-faint);
-    letter-spacing: 0.04em;
+  /* Dot separator drawn in CSS so no extra element is needed. */
+  .brand-text strong::after {
+    content: "·";
+    margin-inline-start: 0.4375rem;
+    color: var(--border-strong);
+    font-weight: 400;
   }
 
-  /* The product name is long in some languages; hide it on small screens. */
+  .brand-text small {
+    font-size: 0.75rem;
+    color: var(--text-faint);
+    letter-spacing: 0.02em;
+  }
+
+  /*
+   * On narrow screens the company name is dropped rather than wrapping the
+   * brand onto two lines; the product name alone still identifies the site.
+   */
   @media (max-width: 560px) {
-    .brand-text strong { display: none; }
+    .brand-text small,
+    .brand-text strong::after { display: none; }
   }
 
   .nav {
@@ -355,34 +375,33 @@ const ogImage = `${SITE.url}/og.png`;
   :global(.dark) .theme-toggle .ico-moon { display: block; }
 
   /*
-   * Footer: two lines on desktop, three on narrow screens.
+   * Footer.
    *
-   * Line 1  brand + all navigation links, wrapping as needed.
-   * Line 2  contact methods (email, Telegram).
-   * Line 3  copyright and the synthetic-data notice.
+   * Row 1  copyright and the synthetic-data notice, with every navigation link
+   *        inline on the same line. The links sit after the text and wrap as a
+   *        group only when the viewport is too narrow to hold them.
+   * Row 2  the Telegram mark, aligned to the right edge.
    *
-   * The previous three-column grid spent a lot of vertical space on eight links
-   * and a short note; a single wrapped row reads better and leaves the page
-   * content as the focus.
+   * The earlier three-column grid used roughly 300px of height for eight links
+   * and one short sentence; this reads as a single strip.
    */
   .site-footer {
     margin-top: 4rem;
     border-top: 1px solid var(--border);
-    padding-block: 2rem 1.5rem;
+    padding-block: 1.5rem 1.75rem;
   }
 
-  .footer-main {
+  .footer-legal-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem 1.5rem;
+    gap: 0.25rem 1.5rem;
   }
 
-  .footer-brand {
-    font-weight: 600;
-    letter-spacing: -0.02em;
+  .footer-legal {
     margin: 0;
-    font-size: 0.9375rem;
+    font-size: 0.75rem;
+    line-height: 1.6;
   }
 
   .footer-links {
@@ -390,6 +409,7 @@ const ogImage = `${SITE.url}/og.png`;
     flex-wrap: wrap;
     align-items: center;
     gap: 0 1.125rem;
+    /* Pushes the links to the right of the copyright text on wide screens. */
     margin-inline-start: auto;
   }
 
@@ -406,39 +426,31 @@ const ogImage = `${SITE.url}/og.png`;
 
   .footer-links a:hover { color: var(--text); }
 
-  /* Contact row: email and Telegram. */
-  .footer-contact {
+  /* Telegram mark, bottom-right. */
+  .footer-mark-row {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0 1.25rem;
-    margin-top: 0.25rem;
+    justify-content: flex-end;
+    margin-top: 0.75rem;
   }
 
   .contact-link {
     display: inline-flex;
     align-items: center;
-    gap: 0.4375rem;
-    font-size: 0.8125rem;
-    color: var(--text-muted);
-    text-decoration: none;
+    justify-content: center;
+    /* 44px hit area around a 40px image. */
+    min-width: 44px;
     min-height: 44px;
-    transition: color 140ms ease;
+    border-radius: var(--radius-sm);
+    transition: opacity 140ms ease;
   }
 
-  .contact-link:hover { color: var(--accent); }
+  .contact-link:hover { opacity: 0.8; }
 
   .contact-link img {
     display: block;
-    width: 15px;
-    height: 15px;
+    width: 40px;
+    height: 40px;
     object-fit: contain;
-  }
-
-  .footer-legal {
-    margin: 0.5rem 0 0;
-    font-size: 0.75rem;
-    line-height: 1.6;
   }
 
   .sr-only {
