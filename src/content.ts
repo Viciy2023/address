@@ -182,7 +182,7 @@ export const CONTACT: Copy = {
     sections: [
       {
         heading: "联系方式",
-        body: ["请通过以下任一方式与我们联系。若是邮件，请在标题中简要说明来意，以便我们更快处理。", "- 电子邮箱：cyuan52@gmail.com", "- Telegram：@cyuan52"],
+        body: ["请通过邮件与我们联系。请在标题中简要说明来意，以便我们更快处理。", "- 电子邮箱：cyuan52@gmail.com"],
       },
       {
         heading: "我们最想收到的反馈",
@@ -205,7 +205,7 @@ export const CONTACT: Copy = {
     sections: [
       {
         heading: "How to reach us",
-        body: ["Reach us through either channel below. If you write, a concise subject line telling us what the message is about helps us respond faster.", "- Email: cyuan52@gmail.com", "- Telegram: @cyuan52"],
+        body: ["Reach us by email. A concise subject line telling us what the message is about helps us respond faster.", "- Email: cyuan52@gmail.com"],
       },
       {
         heading: "Feedback we are most interested in",
@@ -228,7 +228,7 @@ export const CONTACT: Copy = {
     sections: [
       {
         heading: "連絡方法",
-        body: ["以下のいずれかの方法でご連絡ください。メールの場合、件名に用件を簡潔にご記入いただけると迅速に対応できます。", "- メール：cyuan52@gmail.com", "- Telegram：@cyuan52"],
+        body: ["ご連絡はメールでお願いします。件名に用件を簡潔にご記入いただけると迅速に対応できます。", "- メール：cyuan52@gmail.com"],
       },
       {
         heading: "特にお待ちしているご報告",
@@ -251,7 +251,7 @@ export const CONTACT: Copy = {
     sections: [
       {
         heading: "연락 방법",
-        body: ["아래 두 가지 방법 중 편한 쪽으로 연락해 주세요. 이메일인 경우 제목에 용건을 간단히 적어 주시면 더 빠르게 답변드립니다.", "- 이메일: cyuan52@gmail.com", "- Telegram: @cyuan52"],
+        body: ["연락은 이메일로 부탁드립니다. 제목에 용건을 간단히 적어 주시면 더 빠르게 답변드립니다.", "- 이메일: cyuan52@gmail.com"],
       },
       {
         heading: "특히 환영하는 제보",
@@ -275,15 +275,8 @@ export const CONTACT: Copy = {
       {
         heading: "電子郵件",
         body: [
-          "請透過以下任一方式與我們聯絡。若是郵件，請在標題中簡要說明來意，以便我們更快處理。",
+          "請透過郵件與我們聯絡。請在標題中簡要說明來意，以便我們更快處理。",
           "- 電子郵件：cyuan52@gmail.com",
-          "- Telegram：@cyuan52",
-        ],
-      },
-      {
-        heading: "Telegram",
-        body: [
-          "若你偏好即時通訊，也可以透過 Telegram 與我們聯絡：@cyuan52。",
         ],
       },
       {

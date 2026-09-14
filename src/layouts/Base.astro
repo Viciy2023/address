@@ -158,15 +158,22 @@ const ogImage = `${SITE.url}/og.png`;
     <footer class="site-footer">
       <div class="shell">
         <!--
-          Footer layout:
-            row 1  copyright · synthetic-data notice, and the navigation links
-                   inline on the same line (wrapping only when there is no room)
-            row 2  the Telegram mark, pinned bottom-right
+          Footer layout: one row with three parts.
+            left    copyright and the synthetic-data notice
+            centre  contact links (email, Telegram)
+            right   the site navigation
+          On narrow screens the parts stack, with the contacts kept together.
         -->
-        <div class="footer-legal-row">
+        <div class="footer-row">
           <p class="footer-legal faint">
             © {new Date().getFullYear()} {SITE.name[lang]}. {s.footerRights} · {s.footerNote}
           </p>
+
+          <div class="footer-contact">
+            <a class="contact-link" href={`mailto:${SITE.email}`}>{SITE.email}</a>
+            <a class="contact-link" href={SITE.telegram} rel="noopener noreferrer" target="_blank">@Telegram</a>
+          </div>
+
           <nav class="footer-links" aria-label={s.linkAbout}>
             <a href={localize("/", lang)}>{s.navGenerate}</a>
             <a href={localize("/countries/", lang)}>{s.linkCountries}</a>
@@ -176,18 +183,6 @@ const ogImage = `${SITE.url}/og.png`;
             <a href={localize("/privacy/", lang)}>{s.linkPrivacy}</a>
             <a href={localize("/terms/", lang)}>{s.linkTerms}</a>
           </nav>
-        </div>
-
-        <div class="footer-mark-row">
-          <a
-            class="contact-link"
-            href={SITE.telegram}
-            rel="noopener noreferrer"
-            target="_blank"
-            aria-label="Telegram"
-          >
-            <img src="/telegram.png" alt="Telegram" width="40" height="40" loading="lazy" decoding="async" />
-          </a>
         </div>
       </div>
     </footer>
@@ -375,15 +370,15 @@ const ogImage = `${SITE.url}/og.png`;
   :global(.dark) .theme-toggle .ico-moon { display: block; }
 
   /*
-   * Footer.
+   * Footer: a single row with three parts.
    *
-   * Row 1  copyright and the synthetic-data notice, with every navigation link
-   *        inline on the same line. The links sit after the text and wrap as a
-   *        group only when the viewport is too narrow to hold them.
-   * Row 2  the Telegram mark, aligned to the right edge.
+   *   left    copyright and the synthetic-data notice
+   *   centre  contact links (email, Telegram)
+   *   right   site navigation
    *
-   * The earlier three-column grid used roughly 300px of height for eight links
-   * and one short sentence; this reads as a single strip.
+   * The contacts sit between the two because that is where a reader looks for
+   * them, and grouping them keeps the row scannable. Below 900px the three
+   * parts stack, with the contacts remaining on one line of their own.
    */
   .site-footer {
     margin-top: 4rem;
@@ -391,11 +386,21 @@ const ogImage = `${SITE.url}/og.png`;
     padding-block: 1.5rem 1.75rem;
   }
 
-  .footer-legal-row {
-    display: flex;
-    flex-wrap: wrap;
+  .footer-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
     align-items: center;
-    gap: 0.25rem 1.5rem;
+    text-align: center;
+  }
+
+  @media (min-width: 900px) {
+    .footer-row {
+      /* The middle column is content-sized so the contacts stay centred. */
+      grid-template-columns: 1fr auto 1fr;
+      gap: 1.5rem;
+      text-align: start;
+    }
   }
 
   .footer-legal {
@@ -404,20 +409,52 @@ const ogImage = `${SITE.url}/og.png`;
     line-height: 1.6;
   }
 
+  @media (min-width: 900px) {
+    .footer-legal { justify-self: start; }
+  }
+
+  /* Contact links, centred on wide screens. */
+  .footer-contact {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0 1.25rem;
+  }
+
+  .contact-link {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    /* 44px minimum touch target without adding visual weight. */
+    min-height: 44px;
+    transition: color 140ms ease;
+  }
+
+  .contact-link:hover {
+    color: var(--accent);
+    text-decoration: underline;
+  }
+
+  /* Navigation, right-aligned on wide screens. */
   .footer-links {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    justify-content: center;
     gap: 0 1.125rem;
-    /* Pushes the links to the right of the copyright text on wide screens. */
-    margin-inline-start: auto;
+  }
+
+  @media (min-width: 900px) {
+    .footer-links { justify-self: end; }
   }
 
   .footer-links a {
     font-size: 0.8125rem;
     color: var(--text-muted);
     text-decoration: none;
-    /* 44px minimum touch target without adding visual weight. */
     min-height: 44px;
     display: inline-flex;
     align-items: center;
@@ -425,33 +462,6 @@ const ogImage = `${SITE.url}/og.png`;
   }
 
   .footer-links a:hover { color: var(--text); }
-
-  /* Telegram mark, bottom-right. */
-  .footer-mark-row {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 0.75rem;
-  }
-
-  .contact-link {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    /* 44px hit area around a 40px image. */
-    min-width: 44px;
-    min-height: 44px;
-    border-radius: var(--radius-sm);
-    transition: opacity 140ms ease;
-  }
-
-  .contact-link:hover { opacity: 0.8; }
-
-  .contact-link img {
-    display: block;
-    width: 40px;
-    height: 40px;
-    object-fit: contain;
-  }
 
   .sr-only {
     position: absolute;

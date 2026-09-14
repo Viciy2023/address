@@ -110,7 +110,7 @@ export const SITE = {
   /** Contact addresses used on the contact page and in legal pages. */
   email: "cyuan52@gmail.com",
   /** Telegram contact, surfaced in the footer and on the contact page. */
-  telegram: "https://t.me/cyuan52",
+  telegram: "https://t.me/ccy2056",
   /** AdSense publisher id. Empty means "no ads" — the banner is not rendered. */
   adsenseClient: import.meta.env.ADSENSE_CLIENT ?? process.env.ADSENSE_CLIENT ?? "",
   /** Cloudflare Web Analytics token. Empty means "no analytics". */
