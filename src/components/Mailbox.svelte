@@ -47,6 +47,8 @@
   let openMailId: string | number | null = null;
 
   let pollTimer: ReturnType<typeof setInterval> | undefined;
+  /** Seconds until the next automatic poll; drives the countdown line. */
+  let secondsLeft = POLL_MS / 1000;
 
   function flash(key: string) {
     copiedField = key;
@@ -174,17 +176,29 @@
   /*
    * Poll only while the tab is visible. A mailbox left open in a background tab
    * would otherwise keep the visitor's device hitting the server indefinitely.
+   *
+   * A one-second ticker drives the countdown line above the inbox, so the
+   * visitor can see that the page is waiting on purpose rather than stalled.
    */
   function restartPolling() {
     stopPolling();
+    secondsLeft = POLL_MS / 1000;
     if (!autoRefresh || !mailbox) return;
+
     pollTimer = setInterval(() => {
-      if (document.visibilityState === "visible") void refresh(true);
-    }, POLL_MS);
+      if (document.visibilityState !== "visible") return;
+      secondsLeft -= 1;
+      if (secondsLeft > 0) return;
+      secondsLeft = POLL_MS / 1000;
+      void refresh(true);
+    }, 1000);
   }
 
   function onVisibility() {
-    if (document.visibilityState === "visible") void refresh(true);
+    if (document.visibilityState === "visible") {
+      secondsLeft = POLL_MS / 1000;
+      void refresh(true);
+    }
   }
 
   onMount(async () => {
@@ -258,10 +272,16 @@
     <p class="error" role="alert">{error}</p>
   {/if}
 
-  <div class="columns">
-    <!-- Controls -->
-    <section class="card controls" aria-label={m.newAddress}>
-      <div class="field">
+  <!--
+    Controls: everything on one line.
+    Domain, prefix, New address, the auto-refresh toggle, Refresh, Clear inbox
+    and the disclaimer all share a single wrapping row. On a desktop the whole
+    set fits on one line, as on haoweichi.com/mail; on narrow screens the row
+    wraps instead of collapsing into a tall stack.
+  -->
+  <section class="card controls" aria-label={m.newAddress}>
+    <div class="controls-row">
+      <div class="field field-domain">
         <label class="field-label" for="mail-domain">{m.domainLabel}</label>
         <select id="mail-domain" class="select" bind:value={domain} disabled={busy}>
           {#each settings?.domains ?? [] as d (d)}
@@ -270,7 +290,7 @@
         </select>
       </div>
 
-      <div class="field">
+      <div class="field field-prefix">
         <label class="field-label" for="mail-prefix">{m.prefixLabel}</label>
         <input
           id="mail-prefix"
@@ -282,11 +302,10 @@
           placeholder={m.prefixPlaceholder}
           bind:value={prefix}
         />
-        <p class="hint faint">{prefixValid ? m.prefixHint : m.errPrefixChars}</p>
       </div>
 
       <button
-        class="btn btn-secondary full"
+        class="btn btn-secondary generate"
         type="button"
         disabled={busy || !settings || !prefixValid}
         on:click={newAddress}
@@ -294,58 +313,72 @@
         {busy ? m.loading : m.newAddress}
       </button>
 
-      <hr class="rule" />
-
       <label class="toggle">
         <input type="checkbox" bind:checked={autoRefresh} />
         <span>{m.autoRefresh}</span>
       </label>
 
-      <div class="row-actions">
-        <button class="btn btn-ghost" type="button" disabled={busy || !mailbox} on:click={() => refresh()}>
-          {m.refresh}
-        </button>
-        <button
-          class="btn btn-ghost"
-          type="button"
-          disabled={busy || !mailbox || !settings?.enableUserDeleteEmail}
-          on:click={doClear}
-        >
-          {busy ? m.clearing : m.clearInbox}
-        </button>
+      <button class="btn btn-ghost" type="button" disabled={busy || !mailbox} on:click={() => refresh()}>
+        {m.refresh}
+      </button>
+      <button
+        class="btn btn-ghost"
+        type="button"
+        disabled={busy || !mailbox || !settings?.enableUserDeleteEmail}
+        on:click={doClear}
+      >
+        {busy ? m.clearing : m.clearInbox}
+      </button>
+
+      <!-- The disclaimer trails the controls on the same line. -->
+      <p class="hint faint controls-note">{m.disclaimer}</p>
+    </div>
+
+    {#if !prefixValid}
+      <p class="hint faint controls-warn">{m.errPrefixChars}</p>
+    {/if}
+  </section>
+
+  <!-- Inbox: full width, below the controls. -->
+  <section class="card inbox" aria-label={m.inbox}>
+    <header class="inbox-head">
+      <h2>{m.inbox}</h2>
+      {#if count > 0}<span class="pill">{count}</span>{/if}
+
+      <!-- Live status: tells the visitor the page is waiting, not stalled. -->
+      <p class="live faint" aria-live="polite">
+        {#if !mailbox}
+          {m.loading}
+        {:else if autoRefresh}
+          <span class="dot" aria-hidden="true"></span>
+          {m.receiving} {secondsLeft}{m.secondsUntilRefresh}
+        {:else}
+          {m.autoRefreshOff}
+        {/if}
+      </p>
+    </header>
+
+    {#if loadingMail && mails.length === 0}
+      <p class="state faint">{m.loading}</p>
+    {:else if mails.length === 0}
+      <div class="state">
+        <p class="empty-title">{m.empty}</p>
+        <p class="faint">{m.emptyHint}</p>
       </div>
-
-      <p class="hint faint">{m.disclaimer}</p>
-    </section>
-
-    <!-- Inbox -->
-    <section class="card inbox" aria-label={m.inbox}>
-      <header class="inbox-head">
-        <h2>{m.inbox}</h2>
-        {#if count > 0}<span class="pill">{count}</span>{/if}
-      </header>
-
-      {#if loadingMail && mails.length === 0}
-        <p class="state faint">{m.loading}</p>
-      {:else if mails.length === 0}
-        <div class="state">
-          <p class="empty-title">{m.empty}</p>
-          <p class="faint">{m.emptyHint}</p>
-        </div>
-      {:else}
-        <ul class="mail-list">
-          {#each mails as mail (mail.id)}
-            <li class="mail" class:open={openMailId === mail.id}>
-              <button
-                class="mail-head"
-                type="button"
-                aria-expanded={openMailId === mail.id}
-                on:click={() => (openMailId = openMailId === mail.id ? null : mail.id)}
-              >
-                <span class="mail-from">{mail.sender || m.from}</span>
-                <span class="mail-subject">{mail.subject || "(no subject)"}</span>
-                <span class="mail-time faint">{fmtTime(mail.created_at)}</span>
-              </button>
+    {:else}
+      <ul class="mail-list">
+        {#each mails as mail (mail.id)}
+          <li class="mail" class:open={openMailId === mail.id}>
+            <button
+              class="mail-head"
+              type="button"
+              aria-expanded={openMailId === mail.id}
+              on:click={() => (openMailId = openMailId === mail.id ? null : mail.id)}
+            >
+              <span class="mail-from">{mail.sender || m.from}</span>
+              <span class="mail-subject">{mail.subject || "(no subject)"}</span>
+              <span class="mail-time faint">{fmtTime(mail.created_at)}</span>
+            </button>
 
               {#if openMailId === mail.id}
                 <div class="mail-body">
@@ -383,8 +416,23 @@
           {/each}
         </ul>
       {/if}
-    </section>
-  </div>
+  </section>
+
+  <!-- How it works, below the inbox. -->
+  <section class="card guide" aria-labelledby="mail-guide-h">
+    <h2 id="mail-guide-h">{m.guideTitle}</h2>
+    <ol class="guide-steps">
+      {#each m.guideSteps as step, i (step.title)}
+        <li>
+          <span class="step-no" aria-hidden="true">{i + 1}</span>
+          <div>
+            <p class="step-title">{step.title}</p>
+            <p class="step-body faint">{step.body}</p>
+          </div>
+        </li>
+      {/each}
+    </ol>
+  </section>
 </div>
 
 <style>
@@ -420,48 +468,70 @@
     overflow-wrap: anywhere;
   }
 
-  /* --------------------------------------------------------- two columns */
-
-  .columns {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1rem;
-    align-items: start;
-  }
-
-  @media (min-width: 900px) {
-    .columns {
-      grid-template-columns: 20rem 1fr;
-    }
-  }
-
   /* ------------------------------------------------------------ controls */
 
+  /*
+   * Everything on one line.
+   *
+   * The controls are a single wrapping flex row: domain, prefix, New address,
+   * the auto-refresh toggle, Refresh, Clear inbox and the disclaimer. At desktop
+   * widths they fit on one line, matching haoweichi.com/mail. The disclaimer
+   * takes the remaining space (`flex: 1`) so it sits on that same line instead
+   * of dropping to its own row; when the row wraps on narrow screens it simply
+   * moves to the next line, which is unavoidable.
+   */
   .controls {
-    display: flex;
-    flex-direction: column;
-    gap: 0.875rem;
     padding: 1.25rem;
   }
 
-  .field { display: block; }
-
-  .full { width: 100%; }
-
-  .row-actions {
+  .controls-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    align-items: center;
+    gap: 0.625rem 0.75rem;
+  }
+
+  .field {
+    display: block;
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+
+  .field-domain { flex-basis: 10rem; }
+  .field-prefix { flex-basis: 8rem; }
+
+  .select,
+  .input { width: 100%; }
+
+  .generate { white-space: nowrap; }
+
+  /*
+   * The disclaimer trails the row as the last flex item. Its basis is 0 so it
+   * claims only the space the six controls leave over, which keeps it on the
+   * same visual line as them; the text wraps inside its own column rather than
+   * pushing to a new row.
+   */
+  .controls-note {
+    flex: 1 1 0;
+    min-width: 7rem;
+    margin: 0;
+  }
+
+  /* Prefix validation error, shown only when the prefix is invalid. */
+  .controls-warn {
+    margin: 0.625rem 0 0;
+    color: var(--color-danger-600);
   }
 
   .toggle {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4375rem;
     font-size: 0.8125rem;
     color: var(--text-muted);
     min-height: 44px;
     cursor: pointer;
+    white-space: nowrap;
   }
 
   .toggle input { width: 16px; height: 16px; accent-color: var(--accent); }
@@ -472,8 +542,9 @@
 
   .inbox-head {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 0.625rem;
+    gap: 0.375rem 0.625rem;
     padding: 0.875rem 1.25rem;
     border-bottom: 1px solid var(--border);
     background: var(--surface-2);
@@ -482,6 +553,34 @@
   .inbox-head h2 {
     margin: 0;
     font-size: 0.9375rem;
+  }
+
+  /* Live status, pushed to the right of the header row. */
+  .live {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin: 0 0 0 auto;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Pulsing dot: signals the page is actively waiting rather than idle. */
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dot { animation: none; }
   }
 
   .mail-list {
@@ -586,6 +685,72 @@
     margin: 0;
     font-family: var(--font-mono);
     font-size: 0.8125rem;
+  }
+
+  /* --------------------------------------------------------- guide card */
+
+  /*
+   * Explanatory card under the inbox.
+   *
+   * A numbered list rather than prose: the feature has a definite sequence
+   * (copy, paste, wait, copy the code, discard) and a visitor scanning for
+   * "how do I get the code" should find it without reading paragraphs.
+   */
+  .guide {
+    padding: 1.5rem;
+  }
+
+  .guide h2 {
+    margin: 0 0 1.25rem;
+    font-size: 1.0625rem;
+  }
+
+  .guide-steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 1rem;
+  }
+
+  @media (min-width: 768px) {
+    .guide-steps {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1.25rem 2rem;
+    }
+  }
+
+  .guide-steps li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .step-no {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    margin-top: 0.125rem;
+  }
+
+  .step-title {
+    margin: 0 0 0.1875rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .step-body {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.7;
   }
 
   /* --------------------------------------------------------------- misc */
