@@ -36,7 +36,7 @@ export interface CityEntry {
 export interface DivisionEntry {
   code: string;
   name: string;
-  /** Localized name per UI language; falls back to `name` when missing. */
+  /** Localized name per data language; falls back to `name` when missing. */
   nameL10n?: Record<string, string>;
   /** Real postal codes recorded for this division (may be empty). */
   postal: string[];

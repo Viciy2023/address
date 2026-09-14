@@ -22,13 +22,14 @@
    *     button — denser, and a far larger touch target.
    */
   import type { Identity, GroupKey, IdentityField } from "../lib/generator";
-  import { avatarSvg } from "../lib/generator/avatar";
   import type { Strings } from "../i18n/strings";
   import type { SiteLang } from "../config";
 
   export let s: Strings;
   export let lang: SiteLang;
   export let identity: Identity | null = null;
+  /** "<<sex>>/<<index>>" for the AI-generated portrait, or empty for none. */
+  export let avatarSeed = "";
 
   let copiedKey: string | null = null;
 
@@ -161,8 +162,16 @@
     <!-- Summary: identity at a size that earns the space. -->
     <section class="card summary">
       <div class="summary-media">
-        <!-- Inline SVG drawn from the record's seed; no network request. -->
-        <div class="avatar" aria-hidden="true">{@html avatarSvg(identity)}</div>
+        {#if avatarSeed}
+          <img
+            src={"https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/" + avatarSeed + "/256.jpg"}
+            alt=""
+            width="72"
+            height="72"
+            loading="eager"
+            decoding="async"
+          />
+        {/if}
       </div>
       <div class="summary-body">
         <p class="eyebrow">{identity.summary.country[lang]}</p>
@@ -278,20 +287,15 @@
     }
   }
 
-  .avatar {
+  .summary-media img {
     width: 72px;
     height: 72px;
+    object-fit: cover;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    overflow: hidden;
     background: var(--surface-2);
     box-shadow: var(--shadow-xs);
-  }
-
-  .avatar :global(svg) {
     display: block;
-    width: 100%;
-    height: 100%;
   }
 
   .summary-name {

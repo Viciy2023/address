@@ -20,7 +20,10 @@ import { makePostal } from "./postal.js";
 import { makeNationalId } from "./identifiers.js";
 import type { CountrySpec, LocalizedText, Lang } from "../registry.js";
 import {
+  AU_STATE,
   BR_UF,
+  CA_PROVINCE,
+  STREET_STYLES,
   CARD_BANKS,
   CARD_NETWORKS,
   CN_GB2260_PREFIX,
@@ -127,6 +130,11 @@ export interface GenerateOptions {
  * Latin-script languages accept anything, since their addresses separate the
  * parts with spaces.
  */
+/** Membership test with the argument order that reads better at call sites. */
+function inSet(value: string, set: readonly string[]): boolean {
+  return set.includes(value);
+}
+
 function isNativeScript(name: string | undefined, lang: string): boolean {
   if (!name) return false;
   switch (lang) {
@@ -379,8 +387,22 @@ export function generateIdentity(
    * languages; emitting `.en` unconditionally showed English values under
    * Chinese, Japanese and Korean labels.
    */
-  const L: Lang = opts.lang ?? "en";
-  const lv = (v: L10n): string => v[L];
+  /*
+   * Two languages are in play, and conflating them was the source of the
+   * mixed-language output:
+   *
+   *   spec.dataLang  - the language the RECORD is written in. A Korean record
+   *                    reads 강원도 강릉시…, a Japanese one 岩手県…, an
+   *                    American one "Beaverton, OR" — regardless of the
+   *                    interface language, because the record represents a
+   *                    resident of that country.
+   *   opts.lang      - the INTERFACE language, used only for field labels.
+   *
+   * The labels are applied by the UI from the string table, so the generator
+   * only needs the data language for values.
+   */
+  const L: Lang = spec.dataLang;
+  const lv = (v: L10n): string => v[L] ?? v.en;
   const pickL = (arr: readonly L10n[]): string => lv(rng.pick(arr));
 
   /* ---- country-level context ---- */
@@ -395,7 +417,7 @@ export function generateIdentity(
    * which is not a cosmetic issue — the string is malformed. The localized name
    * is therefore required for those languages, not merely preferred.
    */
-  const divisionName = (opts.lang && division.nameL10n?.[opts.lang]) || division.name;
+  const divisionName = division.nameL10n?.[L] || division.name;
 
   /*
    * Countries whose template concatenates state+city+street with no separator
@@ -413,18 +435,16 @@ export function generateIdentity(
    * parts, so an untranslated name is merely untranslated.
    */
   const concatenated = Boolean(spec.address.streets);
-  const wantedLang = opts.lang;
-  const localizedCities =
-    concatenated && wantedLang
-      ? division.cities.filter((c) => isNativeScript(c.nL10n?.[wantedLang], wantedLang))
-      : division.cities;
+  const localizedCities = concatenated
+    ? division.cities.filter((c) => isNativeScript(c.nL10n?.[L], L))
+    : division.cities;
 
   // `null` means "no city available in this language"; the caller then uses the
   // division name alone.
   const city = localizedCities.length ? rng.pick(localizedCities) : null;
 
   const cityName =
-    (wantedLang && city?.nL10n?.[wantedLang]) ||
+    city?.nL10n?.[L] ||
     city?.n ||
     // A concatenated address omits the city rather than inserting ASCII.
     (concatenated ? "" : divisionName);
@@ -496,29 +516,51 @@ export function generateIdentity(
 
   /* ---- address ---- */
   const streetNumber = rng.int(1, 9899);
-  const streetNames = spec.address.streets ?? [
-    "Main", "Oak", "Park", "Elm", "Maple", "Cedar", "Pine", "Lake", "Hill",
-    "Walnut", "Sunset", "Church", "Market", "Highland", "Victoria", "Station",
-    "Kings", "Queens", "Mill", "School",
-  ];
-  const streetSuffixes = spec.address.streetSuffixes ?? ["St", "Ave", "Rd", "Dr", "Ln", "Blvd", "Way", "Ct"];
-  /*
-   * The street pool is written as name + suffix pairs that read as one word in
-   * CJK addresses (中山路, 本町通り), so they are joined without a space. Latin
-   * streets keep the space ("Main St").
-   */
-  const useLocalStreets = Boolean(spec.address.streets);
-  const baseStreet = useLocalStreets
-    ? `${rng.pick(streetNames)}${rng.pick(streetSuffixes)}`
-    : `${rng.pick(streetNames)} ${rng.pick(streetSuffixes)}`;
 
   /*
-   * Number placement is locale-specific. Latin addresses lead with the house
-   * number ("120 Oak St"); the CJK countries here put it last. The suffix is
-   * not universal either — China uses 号, Japan uses 番地, Korea uses 번지 —
-   * so it comes from the country's own address spec rather than a literal.
+   * Street names come from the country's own pool. A shared English list meant
+   * every Latin-script country carried names like "1734 Elm Ave" — a French
+   * address reading "1734 Elm Ave, 21080 Valentigney" is as wrong as an English
+   * street inside a Chinese address, just less obviously so.
+   *
+   * The per-country pool on the spec wins; otherwise the shared table is
+   * consulted; otherwise the English default applies.
    */
-  const street = useLocalStreets
+  const style = STREET_STYLES[spec.code];
+  const streetNames = spec.address.streets ?? style?.streets ?? [
+    "Main", "Oak", "Park", "Elm", "Maple", "Cedar", "Pine", "Lake", "Hill",
+    "Walnut", "Sunset", "Church", "Market", "Highland", "Victoria", "Station",
+  ];
+  const streetSuffixes = spec.address.streetSuffixes ?? style?.suffixes ?? ["St", "Ave", "Rd", "Dr", "Ln", "Blvd", "Way"];
+
+  const streetStem = rng.pick(streetNames);
+  const roadType = rng.pick(streetSuffixes);
+
+  /*
+   * Word order and spacing are properties of the language:
+   *
+   *   suffixFirst  "Rue Victor Hugo" (French) vs "Main Street" (English).
+   *                Emitting "Victor Hugo Rue" reads as nonsense to a speaker.
+   *   attaches     "Hauptstraße" (German compounds) vs "Main St" (separate).
+   *
+   * CJK addresses attach and put the road type last, which the spec already
+   * declares via `streets`.
+   */
+  const suffixFirst = spec.address.streets ? false : Boolean(style?.suffixFirst);
+  const attaches = Boolean(spec.address.streets) || Boolean(style?.attaches);
+
+  const baseStreet = suffixFirst
+    ? `${roadType} ${streetStem}`
+    : attaches
+      ? `${streetStem}${roadType}`
+      : `${streetStem} ${roadType}`;
+
+  /*
+   * Number placement follows the same logic. Latin addresses lead with the
+   * house number ("120 Oak St"); CJK addresses put it last with a marker
+   * (号 / 番地 / 번지).
+   */
+  const street = spec.address.streets
     ? `${baseStreet}${streetNumber}${spec.address.houseSuffix ?? ""}`
     : `${streetNumber} ${baseStreet}`;
 
@@ -545,26 +587,45 @@ export function generateIdentity(
 
   // Address lines follow the country's own ordering. The country name is
   // localized too: a Chinese address ending in "China" is inconsistent.
-  const countryName = (opts.lang && spec.name[opts.lang]) || spec.name.en;
+  const countryName = spec.name[L] || spec.name.en;
   /*
    * `{stateCode}` resolves to the locally correct abbreviation. Brazilian
    * addresses are written "City - UF" using the two-letter state abbreviation,
    * not the numeric division code the dataset carries — "Cascavel - 18" is not
    * a form that exists.
    */
-  const stateAbbr = BR_UF[division.code] ?? division.code;
+  /*
+   * The abbreviation that belongs in a local address. Each country uses a
+   * different scheme: Brazil and Canada the postal abbreviation, Australia the
+   * state code; the rest keep the division code the dataset carries.
+   */
+  const stateAbbr =
+    spec.code === "BR"
+      ? BR_UF[division.code] ?? division.code
+      : spec.code === "CA"
+        ? CA_PROVINCE[division.code] ?? division.code
+        : spec.code === "AU"
+          ? AU_STATE[division.name] ?? division.code
+          : division.code;
   const addressLines = spec.address.template.map((line) =>
     line
       .replace("{street}", street)
       .replace("{city}", cityName)
-      .replace("{stateCode}", spec.code === "BR" ? stateAbbr : division.code)
+      .replace("{stateCode}", stateAbbr)
       .replace("{state}", divisionName)
       .replace("{postal}", postal.value)
       .replace("{country}", countryName),
   );
+  /*
+   * The complete address is presented on one line. The multi-line form mirrored
+   * how it would be written on an envelope, but on screen it wastes vertical
+   * space and reads as several separate values rather than one address. The
+   * parts are joined with the country's own separator so it still reads
+   * naturally: "강원도 강릉시 충장로 12번지, 16216, 대한민국".
+   */
   const fullAddress = addressLines
     .filter((l) => l.replace(/[\s,]/g, "").length > 0)
-    .join("\n");
+    .join(", ");
 
   /* ---- contact ---- */
   /*

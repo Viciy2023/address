@@ -137,6 +137,46 @@ function ensureDump(name) {
  * @param ascii the GeoNames ASCII name
  * @returns object of differing names, or null when none differ
  */
+
+/**
+ * Chinese names for Hong Kong and Macau districts and localities.
+ *
+ * GeoNames stores these with English suffixes ("Wong Tai Sin District") and
+ * supplies a Chinese alias for only about half. Left as-is, a Chinese address
+ * mixes scripts: "Sai Kung District, 小赤沙".
+ *
+ * The mapping is explicit rather than generated, because transliterating
+ * Cantonese place names by rule produces wrong characters.
+ */
+const HK_MO_NAMES = {
+  "Central and Western District": "中西區",
+  "Wan Chai District": "灣仔區",
+  "Eastern District": "東區",
+  "Southern District": "南區",
+  "Yau Tsim Mong District": "油尖旺區",
+  "Sham Shui Po District": "深水埗區",
+  "Kowloon City District": "九龍城區",
+  "Wong Tai Sin District": "黃大仙區",
+  "Kwun Tong District": "觀塘區",
+  "Kwai Tsing District": "葵青區",
+  "Tsuen Wan District": "荃灣區",
+  "Tuen Mun District": "屯門區",
+  "Yuen Long District": "元朗區",
+  "North District": "北區",
+  "Tai Po District": "大埔區",
+  "Sha Tin District": "沙田區",
+  "Sai Kung District": "西貢區",
+  "Islands District": "離島區",
+  "Macao": "澳門",
+  "Nossa Senhora de Fatima": "花地瑪堂區",
+  "Santo Antonio": "聖安東尼堂區",
+  "Sao Lazaro": "望德堂區",
+  "Se": "大堂區",
+  "Nossa Senhora do Carmo": "嘉模堂區",
+  "Cotai": "路氹城",
+  "Sao Francisco Xavier": "聖方濟各堂區",
+};
+
 function buildNameL10n(loc, ascii) {
   const KANA = /[\u3040-\u309F\u30A0-\u30FF]/;
 
@@ -145,6 +185,7 @@ function buildNameL10n(loc, ascii) {
     en: loc?.en,
     ja: loc?.ja,
     ko: loc?.ko,
+    ru: loc?.ru,
   };
 
   if (!candidates.zh && candidates.ja && !KANA.test(candidates.ja)) {
@@ -155,6 +196,18 @@ function buildNameL10n(loc, ascii) {
   for (const [lang, value] of Object.entries(candidates)) {
     if (value && value !== ascii) out[lang] = value;
   }
+
+  /*
+   * GeoNames' English aliases are unreliable for administrative divisions: New
+   * York's is "Empire State", Kentucky's "Blue Grass State", Idaho's "State of
+   * Idaho". Those are nicknames and legal formalities, not the name that appears
+   * on an address. For English the ASCII name is already the correct form
+   * ("New York", "Idaho"), so the alias is discarded and the ASCII name used.
+   */
+  if (out.en) delete out.en;
+
+  // Hong Kong and Macau districts: prefer the curated Chinese name.
+  if (HK_MO_NAMES[ascii]) out.zh = HK_MO_NAMES[ascii];
 
   return Object.keys(out).length ? out : null;
 }
@@ -284,7 +337,7 @@ function loadAlternateNames() {
     if (c[0] && CODES.includes(c[8])) cityIds.add(c[0]);
   }
 
-  const WANTED = new Set(["zh", "en", "ja", "ko"]);
+  const WANTED = new Set(["zh", "en", "ja", "ko", "ru"]);
   const admin1 = new Map();
   const cities = new Map();
 

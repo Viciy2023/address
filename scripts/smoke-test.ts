@@ -847,5 +847,119 @@ console.log("\n=== generated values match country conventions ===");
   for (const e of examples) console.log(`    ${e}`);
 }
 
+{
+  /*
+   * The record is written in the country's own language, independent of the
+   * interface language. A Korean record shown on a Chinese interface must read
+   * 강원도 강릉시…, not 江原道 江陵市…; the interface language governs the
+   * labels around the data, not the data itself.
+   *
+   * The strongest check is invariance: the same seed must produce byte-identical
+   * data regardless of which interface language requested it.
+   */
+  const SCRIPT: Record<string, RegExp> = {
+    ko: /[\uAC00-\uD7AF]/,
+    ja: /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/,
+  };
+
+  let checked = 0;
+  let bad = 0;
+  const examples: string[] = [];
+
+  for (const code of COUNTRY_CODES) {
+    const spec = COUNTRY_BY_CODE[code];
+    const data = getCountryData(code);
+    if (!spec || !data) continue;
+    const name = getNamePool(code);
+
+    // Same seed, four interface languages.
+    const rendered = (["zh", "en", "ja", "ko"] as const).map((ui) =>
+      generateIdentity(spec, { name, countryData: data }, { country: code, seed: 4242, lang: ui }),
+    );
+
+    const fields = ["state", "city", "country", "fullAddress", "jobTitle", "company", "postal"];
+    checked++;
+    for (const f of fields) {
+      const values = new Set(rendered.map((r) => r.map[f] ?? ""));
+      if (values.size !== 1) {
+        bad++;
+        if (examples.length < 5) {
+          examples.push(`${code}.${f} varies with UI language: ${[...values].map((v) => JSON.stringify(v)).join(" vs ")}`);
+        }
+      }
+    }
+
+    // The data must be in the country's script where that script is not Latin.
+    if (SCRIPT[spec.dataLang]) {
+      const addr = rendered[0].map.fullAddress ?? "";
+      if (!SCRIPT[spec.dataLang].test(addr)) {
+        bad++;
+        if (examples.length < 5) examples.push(`${code}: address not in ${spec.dataLang}: ${JSON.stringify(addr)}`);
+      }
+    }
+  }
+
+  check(bad === 0, `${bad} data fields vary with the interface language or use the wrong script`);
+  console.log(`  ${checked} countries emit data independent of the interface language`);
+  for (const e of examples) console.log(`    ${e}`);
+}
+
+{
+  /*
+   * The complete address is a single line. It was joined with newlines, which
+   * on screen reads as several separate values rather than one address.
+   */
+  let checked = 0;
+  let bad = 0;
+  const examples: string[] = [];
+
+  for (const code of COUNTRY_CODES) {
+    const spec = COUNTRY_BY_CODE[code];
+    const data = getCountryData(code);
+    if (!spec || !data) continue;
+    const name = getNamePool(code);
+    const id = generateIdentity(spec, { name, countryData: data }, { country: code, seed: 77, lang: "zh" });
+    checked++;
+    const addr = id.map.fullAddress ?? "";
+    if (addr.includes("\n")) {
+      bad++;
+      if (examples.length < 4) examples.push(`${code}: ${JSON.stringify(addr)}`);
+    }
+  }
+  check(bad === 0, `${bad}/${checked} complete addresses still span multiple lines`);
+  console.log(`  ${checked - bad}/${checked} complete addresses are a single line`);
+  for (const e of examples) console.log(`    ${e}`);
+}
+
+{
+  /*
+   * US states must use their standard names. GeoNames' English aliases carry
+   * nicknames and legal formalities — "Empire State" for New York, "State of
+   * Idaho" — which are not what appears on an address.
+   */
+  const BAD = /^(State of|Commonwealth of|Republic of)|State$|Empire State|Blue Grass State/;
+  const spec = COUNTRY_BY_CODE["US"];
+  const data = getCountryData("US");
+  let checked = 0;
+  let bad = 0;
+  const examples: string[] = [];
+
+  if (spec && data) {
+    const name = getNamePool("US");
+    for (let i = 0; i < 60; i++) {
+      const id = generateIdentity(spec, { name, countryData: data }, { country: "US", seed: randomSeed(), lang: "en" });
+      checked++;
+      const state = id.map.state ?? "";
+      if (BAD.test(state)) {
+        bad++;
+        if (examples.length < 5) examples.push(JSON.stringify(state));
+      }
+    }
+  }
+  check(bad === 0, `${bad}/${checked} US state names are nicknames or legal formalities`);
+  console.log(`  ${checked - bad}/${checked} US state names are the standard form`);
+  for (const e of examples) console.log(`    ${e}`);
+}
+
 console.log(`\n${failures === 0 ? "PASS" : "FAIL"} — ${checks} checks, ${failures} failures`);
 process.exit(failures === 0 ? 0 : 1);

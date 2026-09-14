@@ -75,13 +75,12 @@ export interface AddressSpec {
   /** Label for the first-level administrative division. */
   adminLabel: LocalizedText;
   /**
-   * Street-name pool for countries whose address line concatenates the parts
-   * with no separator (CN, JP, KR). Without it those addresses read
-   * "江西Jinfeng9471 Lake Dr 332098" — an English street name glued to a Chinese
-   * address, which is malformed rather than merely untranslated.
+   * Street-name pool for the country's own language.
    *
-   * Countries absent from this list use the shared streets below, which suit
-   * Latin-script addresses.
+   * Without it the shared English pool is used, so a French address read
+   * "1734 Elm Ave" and a German one "2565 Oak Ln". Countries whose addresses
+   * are written in a Latin script still need their own street names: "Rue de la
+   * République", "Hauptstraße", "Calle Mayor".
    */
   streets?: string[];
   /** Suffix appended to the street name; used with `streets`. */
@@ -91,6 +90,15 @@ export interface AddressSpec {
    * CN 号, JP 番地, KR 번지.
    */
   houseSuffix?: string;
+  /**
+   * True when the road type precedes the name: "Rue Victor Hugo", "Calle
+   * Cervantes", "Vicolo Garibaldi". Romance languages and Indonesian place the
+   * type first; English, German, Dutch and the Nordics place it last.
+   *
+   * Getting this backwards produced "Victor Hugo Rue" and "Cervantes Calle",
+   * which read as nonsense to a speaker.
+   */
+  suffixFirst?: boolean;
 }
 
 export interface CountrySpec {
@@ -123,6 +131,19 @@ export interface CountrySpec {
   usesEthnicity: boolean;
   schools: string[];
   majors: LocalizedText[];
+  /**
+   * The language the generated record is written in.
+   *
+   * A generated person is a resident of this country, so their address, employer
+   * and personal details belong in that country's language — not in the language
+   * of the interface. A Korean record shown on a Chinese interface must read
+   * 강원도 강릉시..., not 江原道 江陵市...; the UI language governs the labels
+   * around the data, not the data itself.
+   *
+   * Falls back to the UI language when unset, which is correct for the
+   * Latin-script countries where the two coincide.
+   */
+  dataLang: Lang;
 }
 
 /**
@@ -205,6 +226,44 @@ export const BR_UF: Record<string, string> = {
   "31": "TO",
 };
 
+/**
+ * Province and state abbreviations used in addresses.
+ *
+ * Canadian addresses end "…, ON K1A 0B1" and Australian ones "…, NSW 2000",
+ * using the official two- and three-letter codes. The address template
+ * referenced {stateCode}, which in this dataset is GeoNames' internal number, so
+ * records read "Iqaluit, 14 X0C 8A4" and "West Hobart 06 7080".
+ *
+ * Derived from the source data rather than assumed: Canada Post's FSA letter
+ * identifies the province, and Australia's postcode ranges identify the state.
+ */
+export const CA_PROVINCE: Record<string, string> = {
+  "01": "AB",
+  "02": "BC",
+  "03": "MB",
+  "04": "NB",
+  "05": "NL",
+  "07": "NS",
+  "08": "ON",
+  "09": "PE",
+  "10": "QC",
+  "11": "SK",
+  "12": "YT",
+  "13": "NT",
+  "14": "NU",
+};
+
+export const AU_STATE: Record<string, string> = {
+  "Australian Capital Territory": "ACT",
+  "New South Wales": "NSW",
+  "Northern Territory": "NT",
+  "Queensland": "QLD",
+  "South Australia": "SA",
+  "Tasmania": "TAS",
+  "Victoria": "VIC",
+  "Western Australia": "WA",
+};
+
 export const CARD_BANKS: Record<string, Record<string, string[]>> = {
   CN: { UnionPay: ["中国工商银行", "中国建设银行", "中国银行", "中国农业银行", "招商银行", "交通银行"] },
   TW: { Visa: ["國泰世華銀行", "中國信託銀行", "台新銀行"], Mastercard: ["玉山銀行", "富邦銀行"], JCB: ["合作金庫銀行"] },
@@ -281,6 +340,76 @@ export const CARD_NETWORKS: Record<string, string[]> = {
   BR: ["Visa", "Mastercard"],
   MX: ["Visa", "Mastercard"],
   ZA: ["Visa", "Mastercard"],
+};
+
+/**
+ * Street-name pools per country.
+ *
+ * The street name was drawn from a shared English list for every Latin-script
+ * country, so French, German, Spanish, Portuguese, Dutch, Nordic, Polish,
+ * Russian, Turkish and Latin-American addresses all carried names like
+ * "1734 Elm Ave". A street name is part of the address's language.
+ *
+ * `streets` are the name stems and `suffixes` the road type, joined with a
+ * space unless the language attaches it (checked per entry by the generator).
+ */
+/**
+ * How a street name is written in each language.
+ *
+ * Two properties vary and both were wrong before:
+ *
+ *   suffixFirst  Romance languages and Indonesian put the road type first
+ *                ("Rue Victor Hugo", "Calle Cervantes"); English, German,
+ *                Dutch and the Nordic languages put it last ("Main Street",
+ *                "Hauptstraße"). Emitting "Victor Hugo Rue" is nonsense.
+ *   attaches     Whether the suffix joins the name with no space. German, Dutch
+ *                and the Nordic languages compound (Hauptstraße, Kerkstraat,
+ *                Storgatan); everything else separates.
+ *
+ * Streets are the local name stems; suffixes the local road types.
+ */
+export interface StreetStyle {
+  streets: string[];
+  suffixes: string[];
+  /** Road type comes first: "Rue Victor Hugo". */
+  suffixFirst?: boolean;
+  /** Suffix joins the name without a space: "Hauptstraße". */
+  attaches?: boolean;
+  /** House-number placement and marker for scripts that use one. */
+  houseSuffix?: string;
+  /** House number follows the street name (CJK order). */
+  numberLast?: boolean;
+}
+
+export const STREET_STYLES: Record<string, StreetStyle> = {
+  US: { streets: ["Main", "Oak", "Maple", "Cedar", "Pine", "Elm", "Washington", "Lake", "Hill", "Sunset", "Highland", "Riverside", "Franklin", "Jefferson"], suffixes: ["St", "Ave", "Rd", "Dr", "Ln", "Blvd", "Way", "Ct"] },
+  CA: { streets: ["Maple", "Main", "King", "Queen", "Yonge", "Bloor", "Bay", "Dundas"], suffixes: ["St", "Ave", "Rd", "Blvd", "Dr"] },
+  GB: { streets: ["High", "Church", "Station", "Victoria", "Kings", "Queens", "Mill", "Park", "Manor", "Grange", "Windsor", "Albert"], suffixes: ["Street", "Road", "Lane", "Avenue", "Close", "Way", "Drive"] },
+  AU: { streets: ["George", "Collins", "Bourke", "Elizabeth", "Wattle", "Banksia", "Acacia", "Harbour"], suffixes: ["Street", "Road", "Avenue", "Parade", "Crescent", "Drive"] },
+  NZ: { streets: ["Queen", "Victoria", "Karangahape", "Cuba", "Lambton", "Riccarton", "Ponsonby"], suffixes: ["Street", "Road", "Avenue", "Terrace", "Place"] },
+  DE: { streets: ["Haupt", "Bahnhof", "Schul", "Garten", "Berg", "Wald", "Kirch", "Linden", "Goethe", "Schiller"], suffixes: ["straße", "weg", "platz", "allee", "gasse"], attaches: true },
+  FR: { streets: ["Victor Hugo", "de la République", "de la Gare", "du Moulin", "des Écoles", "Jean Jaurès", "de Verdun", "Pasteur", "des Roses", "du Château"], suffixes: ["Rue", "Avenue", "Boulevard", "Place", "Impasse"], suffixFirst: true },
+  IT: { streets: ["Roma", "Garibaldi", "Dante", "Marconi", "Verdi", "Mazzini", "della Libertà", "del Corso"], suffixes: ["Via", "Viale", "Corso", "Piazza", "Vicolo"], suffixFirst: true },
+  ES: { streets: ["Mayor", "Real", "de la Constitución", "Cervantes", "de Alcalá", "de la Paz", "de Goya", "Colón"], suffixes: ["Calle", "Avenida", "Plaza", "Paseo", "Camino"], suffixFirst: true },
+  PT: { streets: ["da Liberdade", "de Santa Catarina", "Augusta", "do Comércio", "de Camões", "das Flores"], suffixes: ["Rua", "Avenida", "Praça", "Travessa", "Largo"], suffixFirst: true },
+  NL: { streets: ["Kerk", "Molen", "School", "Dorps", "Nieuwe", "Hoofd", "Markt", "Station"], suffixes: ["straat", "weg", "laan", "plein", "gracht"], attaches: true },
+  SE: { streets: ["Stor", "Kungs", "Drottning", "Sve", "Norra", "Södra", "Industri", "Skol"], suffixes: ["gatan", "vägen", "torget", "gränd"], attaches: true },
+  NO: { streets: ["Stor", "Kirke", "Skole", "Havne", "Nord", "Sør", "Industri", "Bjørne"], suffixes: ["gata", "veien", "plassen"], attaches: true },
+  PL: { streets: ["Polna", "Leśna", "Ogrodowa", "Krótka", "Słoneczna", "Lipowa", "Brzozowa", "Kościelna"], suffixes: ["ulica", "aleja", "plac"], suffixFirst: true },
+  RU: { streets: ["Ленина", "Советская", "Центральная", "Молодёжная", "Школьная", "Садовая", "Лесная", "Мира"], suffixes: ["улица", "проспект", "переулок"], suffixFirst: true },
+  TR: { streets: ["Atatürk", "Cumhuriyet", "İstiklal", "İnönü", "Bağdat", "Gazi", "Fevzi Çakmak"], suffixes: ["Caddesi", "Sokak", "Bulvarı"] },
+  BR: { streets: ["das Flores", "Sete de Setembro", "Getúlio Vargas", "Santos Dumont", "Rio Branco", "da Praia", "XV de Novembro"], suffixes: ["Rua", "Avenida", "Travessa", "Alameda"], suffixFirst: true },
+  MX: { streets: ["Juárez", "Hidalgo", "Zaragoza", "Reforma", "Constitución", "Insurgentes", "Morelos"], suffixes: ["Calle", "Avenida", "Calzada", "Privada"], suffixFirst: true },
+  ZA: { streets: ["Church", "Main", "Long", "Kloof", "Vine", "Loop", "Bree"], suffixes: ["Street", "Road", "Avenue", "Drive"] },
+  ID: { streets: ["Merdeka", "Sudirman", "Thamrin", "Gatot Subroto", "Diponegoro", "Ahmad Yani"], suffixes: ["Jalan"], suffixFirst: true },
+  MY: { streets: ["Merdeka", "Ampang", "Bukit Bintang", "Tun Razak", "Sultan Ismail"], suffixes: ["Jalan"], suffixFirst: true },
+  SG: { streets: ["Orchard", "Serangoon", "Bukit Timah", "Tanjong Pagar", "River Valley"], suffixes: ["Road", "Street", "Avenue", "Lane"] },
+  TH: { streets: ["สุขุมวิท", "พหลโยธิน", "รัชดาภิเษก", "เพชรบุรี", "สีลม", "อโศก", "พระราม"], suffixes: ["ถนน", "ซอย"], suffixFirst: true, attaches: true },
+  VN: { streets: ["Nguyễn Huệ", "Lê Lợi", "Trần Hưng Đạo", "Hai Bà Trưng", "Lý Thường Kiệt", "Nguyễn Trãi", "Điện Biên Phủ"], suffixes: ["Đường", "Phố"], suffixFirst: true },
+  AE: { streets: ["الشيخ زايد", "المكتوم", "الخليج", "النصر", "الوصل", "جميرا", "المرقبات"], suffixes: ["شارع"], suffixFirst: true },
+  SA: { streets: ["الملك فهد", "العليا", "التحلية", "الملك عبدالله", "الأمير سلطان", "الخزامى"], suffixes: ["طريق", "شارع"], suffixFirst: true },
+  IL: { streets: ["הרצל", "בן גוריון", "רוטשילד", "אלנבי", "ויצמן", "ז׳בוטינסקי", "דיזנגוף"], suffixes: ["רחוב", "דרך", "שדרות"], suffixFirst: true },
+  IN: { streets: ["Mahatma Gandhi", "Nehru", "Rajpath", "Linking", "Brigade", "Chhatrapati Shivaji", "Park"], suffixes: ["Road", "Street", "Marg", "Lane"] },
 };
 
 /**
@@ -432,6 +561,7 @@ const EN_MAJORS: LocalizedText[] = [
 export const COUNTRIES: CountrySpec[] = [
   {
     code: "US",
+    dataLang: "en",
     name: L("美国", "United States", "アメリカ", "미국"),
     nationality: L("美国", "American", "アメリカ人", "미국인"),
     language: L("英语", "English", "英語", "영어"),
@@ -484,6 +614,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "CA",
+    dataLang: "en",
     name: L("加拿大", "Canada", "カナダ", "캐나다"),
     nationality: L("加拿大", "Canadian", "カナダ人", "캐나다인"),
     language: L("英语 / 法语", "English / French", "英語・フランス語", "영어 / 프랑스어"),
@@ -533,6 +664,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "GB",
+    dataLang: "en",
     name: L("英国", "United Kingdom", "イギリス", "영국"),
     nationality: L("英国", "British", "イギリス人", "영국인"),
     language: L("英语", "English", "英語", "영어"),
@@ -582,6 +714,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "AU",
+    dataLang: "en",
     name: L("澳大利亚", "Australia", "オーストラリア", "호주"),
     nationality: L("澳大利亚", "Australian", "オーストラリア人", "호주인"),
     language: L("英语", "English", "英語", "영어"),
@@ -630,6 +763,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "NZ",
+    dataLang: "en",
     name: L("新西兰", "New Zealand", "ニュージーランド", "뉴질랜드"),
     nationality: L("新西兰", "New Zealander", "ニュージーランド人", "뉴질랜드인"),
     language: L("英语 / 毛利语", "English / Māori", "英語・マオリ語", "영어 / 마오리어"),
@@ -678,6 +812,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "DE",
+    dataLang: "en",
     name: L("德国", "Germany", "ドイツ", "독일"),
     nationality: L("德国", "German", "ドイツ人", "독일인"),
     language: L("德语", "German", "ドイツ語", "독일어"),
@@ -726,6 +861,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "FR",
+    dataLang: "en",
     name: L("法国", "France", "フランス", "프랑스"),
     nationality: L("法国", "French", "フランス人", "프랑스인"),
     language: L("法语", "French", "フランス語", "프랑스어"),
@@ -774,6 +910,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "IT",
+    dataLang: "en",
     name: L("意大利", "Italy", "イタリア", "이탈리아"),
     nationality: L("意大利", "Italian", "イタリア人", "이탈리아인"),
     language: L("意大利语", "Italian", "イタリア語", "이탈리아어"),
@@ -821,6 +958,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "ES",
+    dataLang: "en",
     name: L("西班牙", "Spain", "スペイン", "스페인"),
     nationality: L("西班牙", "Spanish", "スペイン人", "스페인인"),
     language: L("西班牙语", "Spanish", "スペイン語", "스페인어"),
@@ -868,6 +1006,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "PT",
+    dataLang: "en",
     name: L("葡萄牙", "Portugal", "ポルトガル", "포르투갈"),
     nationality: L("葡萄牙", "Portuguese", "ポルトガル人", "포르투갈인"),
     language: L("葡萄牙语", "Portuguese", "ポルトガル語", "포르투갈어"),
@@ -915,6 +1054,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "NL",
+    dataLang: "en",
     name: L("荷兰", "Netherlands", "オランダ", "네덜란드"),
     nationality: L("荷兰", "Dutch", "オランダ人", "네덜란드인"),
     language: L("荷兰语", "Dutch", "オランダ語", "네덜란드어"),
@@ -962,6 +1102,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "SE",
+    dataLang: "en",
     name: L("瑞典", "Sweden", "スウェーデン", "스웨덴"),
     nationality: L("瑞典", "Swedish", "スウェーデン人", "스웨덴인"),
     language: L("瑞典语", "Swedish", "スウェーデン語", "스웨덴어"),
@@ -1009,6 +1150,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "NO",
+    dataLang: "en",
     name: L("挪威", "Norway", "ノルウェー", "노르웨이"),
     nationality: L("挪威", "Norwegian", "ノルウェー人", "노르웨이인"),
     language: L("挪威语", "Norwegian", "ノルウェー語", "노르웨이어"),
@@ -1056,6 +1198,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "PL",
+    dataLang: "en",
     name: L("波兰", "Poland", "ポーランド", "폴란드"),
     nationality: L("波兰", "Polish", "ポーランド人", "폴란드인"),
     language: L("波兰语", "Polish", "ポーランド語", "폴란드어"),
@@ -1102,6 +1245,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "RU",
+    dataLang: "en",
     name: L("俄罗斯", "Russia", "ロシア", "러시아"),
     nationality: L("俄罗斯", "Russian", "ロシア人", "러시아인"),
     language: L("俄语", "Russian", "ロシア語", "러시아어"),
@@ -1149,6 +1293,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "CN",
+    dataLang: "zh",
     name: L("中国", "China", "中国", "중국"),
     nationality: L("中国", "Chinese", "中国人", "중국인"),
     language: L("简体中文", "Simplified Chinese", "簡体字中国語", "중국어 간체"),
@@ -1201,6 +1346,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "TW",
+    dataLang: "zh",
     name: L("中国台湾", "Taiwan, China", "中国台湾", "중국 대만"),
     nationality: L("中国台湾", "Taiwanese", "台湾人", "대만인"),
     language: L("繁体中文", "Traditional Chinese", "繁体字中国語", "중국어 번체"),
@@ -1251,6 +1397,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "HK",
+    dataLang: "zh",
     name: L("中国香港", "Hong Kong, China", "中国香港", "중국 홍콩"),
     nationality: L("中国香港", "Hong Konger", "香港人", "홍콩인"),
     language: L("繁体中文 / 英语", "Traditional Chinese / English", "繁体字中国語・英語", "중국어 번체 / 영어"),
@@ -1301,6 +1448,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "MO",
+    dataLang: "zh",
     name: L("中国澳门", "Macao, China", "中国マカオ", "중국 마카오"),
     nationality: L("中国澳门", "Macanese", "マカオ人", "마카오인"),
     language: L("繁体中文 / 葡萄牙语", "Traditional Chinese / Portuguese", "繁体字中国語・ポルトガル語", "중국어 번체 / 포르투갈어"),
@@ -1351,6 +1499,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "JP",
+    dataLang: "ja",
     name: L("日本", "Japan", "日本", "일본"),
     nationality: L("日本", "Japanese", "日本人", "일본인"),
     language: L("日语", "Japanese", "日本語", "일본어"),
@@ -1402,6 +1551,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "KR",
+    dataLang: "ko",
     name: L("韩国", "South Korea", "韓国", "대한민국"),
     nationality: L("韩国", "Korean", "韓国人", "한국인"),
     language: L("韩语", "Korean", "韓国語", "한국어"),
@@ -1452,6 +1602,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "IN",
+    dataLang: "en",
     name: L("印度", "India", "インド", "인도"),
     nationality: L("印度", "Indian", "インド人", "인도인"),
     language: L("英语 / 印地语", "English / Hindi", "英語・ヒンディー語", "영어 / 힌디어"),
@@ -1498,6 +1649,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "ID",
+    dataLang: "en",
     name: L("印度尼西亚", "Indonesia", "インドネシア", "인도네시아"),
     nationality: L("印度尼西亚", "Indonesian", "インドネシア人", "인도네시아인"),
     language: L("印尼语", "Indonesian", "インドネシア語", "인도네시아어"),
@@ -1545,6 +1697,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "MY",
+    dataLang: "en",
     name: L("马来西亚", "Malaysia", "マレーシア", "말레이시아"),
     nationality: L("马来西亚", "Malaysian", "マレーシア人", "말레이시아인"),
     language: L("马来语 / 英语", "Malay / English", "マレー語・英語", "말레이어 / 영어"),
@@ -1592,6 +1745,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "SG",
+    dataLang: "en",
     name: L("新加坡", "Singapore", "シンガポール", "싱가포르"),
     nationality: L("新加坡", "Singaporean", "シンガポール人", "싱가포르인"),
     language: L("英语 / 华语", "English / Mandarin", "英語・中国語", "영어 / 중국어"),
@@ -1639,6 +1793,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "TH",
+    dataLang: "en",
     name: L("泰国", "Thailand", "タイ", "태국"),
     nationality: L("泰国", "Thai", "タイ人", "태국인"),
     language: L("泰语", "Thai", "タイ語", "태국어"),
@@ -1686,6 +1841,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "VN",
+    dataLang: "en",
     name: L("越南", "Vietnam", "ベトナム", "베트남"),
     nationality: L("越南", "Vietnamese", "ベトナム人", "베트남인"),
     language: L("越南语", "Vietnamese", "ベトナム語", "베트남어"),
@@ -1732,6 +1888,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "AE",
+    dataLang: "en",
     name: L("阿联酋", "United Arab Emirates", "アラブ首長国連邦", "아랍에미리트"),
     nationality: L("阿联酋", "Emirati", "アラブ首長国連邦人", "에미리트인"),
     language: L("阿拉伯语 / 英语", "Arabic / English", "アラビア語・英語", "아랍어 / 영어"),
@@ -1779,6 +1936,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "SA",
+    dataLang: "en",
     name: L("沙特阿拉伯", "Saudi Arabia", "サウジアラビア", "사우디아라비아"),
     nationality: L("沙特阿拉伯", "Saudi", "サウジアラビア人", "사우디인"),
     language: L("阿拉伯语", "Arabic", "アラビア語", "아랍어"),
@@ -1825,6 +1983,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "IL",
+    dataLang: "en",
     name: L("以色列", "Israel", "イスラエル", "이스라엘"),
     nationality: L("以色列", "Israeli", "イスラエル人", "이스라엘인"),
     language: L("希伯来语", "Hebrew", "ヘブライ語", "히브리어"),
@@ -1871,6 +2030,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "TR",
+    dataLang: "en",
     name: L("土耳其", "Turkey", "トルコ", "튀르키예"),
     nationality: L("土耳其", "Turkish", "トルコ人", "터키인"),
     language: L("土耳其语", "Turkish", "トルコ語", "터키어"),
@@ -1917,6 +2077,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "BR",
+    dataLang: "en",
     name: L("巴西", "Brazil", "ブラジル", "브라질"),
     nationality: L("巴西", "Brazilian", "ブラジル人", "브라질인"),
     language: L("葡萄牙语", "Portuguese", "ポルトガル語", "포르투갈어"),
@@ -1965,6 +2126,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "MX",
+    dataLang: "en",
     name: L("墨西哥", "Mexico", "メキシコ", "멕시코"),
     nationality: L("墨西哥", "Mexican", "メキシコ人", "멕시코인"),
     language: L("西班牙语", "Spanish", "スペイン語", "스페인어"),
@@ -2012,6 +2174,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "ZA",
+    dataLang: "en",
     name: L("南非", "South Africa", "南アフリカ", "남아프리카"),
     nationality: L("南非", "South African", "南アフリカ人", "남아프리카인"),
     language: L("英语 / 南非荷兰语", "English / Afrikaans", "英語・アフリカーンス語", "영어 / 아프리칸스어"),

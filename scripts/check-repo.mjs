@@ -94,6 +94,9 @@ for (const f of tracked) {
   const rel = path.relative(ROOT, f);
   // This file necessarily contains the patterns themselves.
   if (rel === path.join("scripts", "check-repo.mjs")) continue;
+  // `git ls-files` reports tracked files even after they are deleted from the
+  // working tree but before the deletion is committed; reading one would throw.
+  if (!fs.existsSync(f)) continue;
   const text = fs.readFileSync(f, "utf8");
   for (const { name, re } of SECRET_PATTERNS) {
     if (re.test(text)) secretHits.push(`${rel}: possible ${name}`);
