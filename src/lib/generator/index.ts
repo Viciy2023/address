@@ -20,9 +20,17 @@ import { makePostal } from "./postal.js";
 import { makeNationalId } from "./identifiers.js";
 import type { CountrySpec, LocalizedText, Lang } from "../registry.js";
 import {
+  BR_UF,
+  CARD_BANKS,
+  CARD_NETWORKS,
   CN_GB2260_PREFIX,
+  COMPANY_WORDS,
   COUNTRY_BY_CODE,
   COUNTRY_CODES,
+  FAMILY_NAME_FIRST,
+  MOBILE_PREFIXES,
+  NAME_NO_SPACE,
+  USES_MIDDLE_NAME,
 } from "../registry.js";
 import type { CountryData, NamePool } from "../data.js";
 
@@ -107,6 +115,34 @@ export interface GenerateOptions {
 /* ------------------------------------------------------------------ */
 /* Static pools                                                        */
 /* ------------------------------------------------------------------ */
+
+/**
+ * True when `name` is written in the script that `lang` uses.
+ *
+ * GeoNames occasionally supplies a romanisation where a native name belongs —
+ * Nagoya's Japanese name is stored as "Nagoya-shi". Gluing that into a Japanese
+ * address gives "愛知県Nagoya-shi本町通り" , which is malformed rather than
+ * merely untranslated, so such names are rejected for concatenated templates.
+ *
+ * Latin-script languages accept anything, since their addresses separate the
+ * parts with spaces.
+ */
+function isNativeScript(name: string | undefined, lang: string): boolean {
+  if (!name) return false;
+  switch (lang) {
+    case "zh":
+      // Han characters. Japanese kanji are also Han, so a kanji-only name is
+      // acceptable Chinese (慶尚北道 is valid Chinese for the Korean province).
+      return /[\u4E00-\u9FFF]/.test(name) && !/[\u3040-\u309F\u30A0-\u30FF]/.test(name);
+    case "ja":
+      // Kana or Han; a romanisation contains neither.
+      return /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(name);
+    case "ko":
+      return /[\uAC00-\uD7AF]/.test(name) || /[\u4E00-\u9FFF]/.test(name) && !/[A-Za-z]/.test(name);
+    default:
+      return true;
+  }
+}
 
 const EYE_COLORS: L10n[] = [
   { zh: "棕色", en: "Brown", ja: "茶色", ko: "갈색" },
@@ -343,7 +379,7 @@ export function generateIdentity(
    * languages; emitting `.en` unconditionally showed English values under
    * Chinese, Japanese and Korean labels.
    */
-  const L = opts.lang ?? "en";
+  const L: Lang = opts.lang ?? "en";
   const lv = (v: L10n): string => v[L];
   const pickL = (arr: readonly L10n[]): string => lv(rng.pick(arr));
 
@@ -364,14 +400,14 @@ export function generateIdentity(
   /*
    * Countries whose template concatenates state+city+street with no separator
    * cannot carry an ASCII city name: the result is the malformed string
-   * "江西Jinfeng新华街1号". Where the requested language has no localized name
-   * for a city, that city is passed over in favour of one that does — the data
-   * has enough alternatives that restricting the pool costs nothing visible.
+   * "江西Jinfeng新华街1号". A city is used only when its name for this language
+   * is actually written in that language's script — GeoNames sometimes supplies
+   * a romanisation where a native name should be ("Nagoya-shi" as the Japanese
+   * name for Nagoya), which would still be glued into a Japanese address.
    *
-   * Some divisions have no localized city in the requested language at all
-   * (Kochi's cities have no Korean names). There the city is dropped entirely
-   * and the division name stands in for it: the division is always localized,
-   * so the line stays well-formed rather than falling back to "고치 현Nankoku".
+   * Where a division has no usable city name (Kochi's cities have no Korean
+   * names at all) the city is omitted and the division name stands in, since
+   * the division is always localized.
    *
    * Countries with Latin-script addresses are unaffected: they separate the
    * parts, so an untranslated name is merely untranslated.
@@ -380,7 +416,7 @@ export function generateIdentity(
   const wantedLang = opts.lang;
   const localizedCities =
     concatenated && wantedLang
-      ? division.cities.filter((c) => c.nL10n?.[wantedLang])
+      ? division.cities.filter((c) => isNativeScript(c.nL10n?.[wantedLang], wantedLang))
       : division.cities;
 
   // `null` means "no city available in this language"; the caller then uses the
@@ -403,7 +439,26 @@ export function generateIdentity(
   /* ---- identity ---- */
   const firstName = rng.pick(name.first) || "Alex";
   const lastName = rng.pick(name.last) || "Morgan";
-  const middleName = name.middle.length && rng.chance(0.45) ? rng.pick(name.middle) : "";
+
+  /*
+   * Name order and middle names follow the country's convention.
+   *
+   * "given family" is wrong for China, Japan, Korea, Taiwan, Hong Kong, Macau,
+   * Vietnam and Thailand, where the family name comes first: the correct form
+   * is 廖泽洋, not 泽洋廖.
+   *
+   * Most of those countries also have no middle-name slot. faker supplies no
+   * `middleName` for zh_CN, ja or ko, so it fell back to its English default
+   * and produced "泽洋 Charlie 廖" — an English middle name inside a Chinese
+   * name. Countries without the concept simply get no middle name.
+   */
+  const familyFirst = FAMILY_NAME_FIRST.has(spec.code);
+  const allowMiddle = USES_MIDDLE_NAME.has(spec.code) && name.middle.length > 0;
+  const middleName = allowMiddle && rng.chance(0.45) ? rng.pick(name.middle) : "";
+
+  const nameParts = familyFirst
+    ? [lastName, firstName, middleName]
+    : [firstName, middleName, lastName];
 
   // Birth date drives the age; never drawn independently.
   const year = rng.int(1955, 2006);
@@ -418,7 +473,7 @@ export function generateIdentity(
     age--;
   }
 
-  const fullName = [firstName, middleName, lastName].filter(Boolean).join(" ");
+  const fullName = nameParts.filter(Boolean).join(NAME_NO_SPACE.has(spec.code) ? "" : " ");
 
   /*
    * Several national ID schemes encode the birth date and sex inside the number
@@ -467,10 +522,21 @@ export function generateIdentity(
     ? `${baseStreet}${streetNumber}${spec.address.houseSuffix ?? ""}`
     : `${streetNumber} ${baseStreet}`;
 
-  const phoneNational = rng.digits(spec.phone.nationalDigits);
+  /*
+   * Phone numbers are built from the country's real mobile prefixes rather than
+   * from random digits. A random string cannot be issued: Chinese mobiles begin
+   * with 1, UK mobiles with 7, Korean with 010. The previous output
+   * "+86 097 9130 7567" is not a number any carrier would assign.
+   */
+  const mobilePrefixes = MOBILE_PREFIXES[spec.code] ?? [];
+  const prefix = mobilePrefixes.length ? rng.pick(mobilePrefixes) : "";
+  const remaining = Math.max(0, spec.phone.nationalDigits - prefix.length);
+  const phoneNational = prefix + rng.digits(remaining);
+
   const grouped: string[] = [];
   let cursor = 0;
   for (const g of spec.phone.groups) {
+    if (cursor >= phoneNational.length) break;
     grouped.push(phoneNational.slice(cursor, cursor + g));
     cursor += g;
   }
@@ -480,11 +546,18 @@ export function generateIdentity(
   // Address lines follow the country's own ordering. The country name is
   // localized too: a Chinese address ending in "China" is inconsistent.
   const countryName = (opts.lang && spec.name[opts.lang]) || spec.name.en;
+  /*
+   * `{stateCode}` resolves to the locally correct abbreviation. Brazilian
+   * addresses are written "City - UF" using the two-letter state abbreviation,
+   * not the numeric division code the dataset carries — "Cascavel - 18" is not
+   * a form that exists.
+   */
+  const stateAbbr = BR_UF[division.code] ?? division.code;
   const addressLines = spec.address.template.map((line) =>
     line
       .replace("{street}", street)
       .replace("{city}", cityName)
-      .replace("{stateCode}", division.code)
+      .replace("{stateCode}", spec.code === "BR" ? stateAbbr : division.code)
       .replace("{state}", divisionName)
       .replace("{postal}", postal.value)
       .replace("{country}", countryName),
@@ -538,7 +611,17 @@ export function generateIdentity(
   const ethnicity = spec.usesEthnicity && spec.ethnicities.length ? rng.pick(spec.ethnicities) : null;
 
   /* ---- credit ---- */
-  const issuer = rng.pick(["Visa", "Mastercard", "Amex", "Discover", "JCB", "UnionPay", "Diners"]);
+  /*
+   * The card network and its issuing bank must both suit the country. Drawing
+   * them globally produced a German record with "BANK OF AMERICA" and a Chinese
+   * one with a JCB card the holder could not obtain locally.
+   */
+  const networksForCountry = CARD_NETWORKS[spec.code] ?? ["Visa", "Mastercard"];
+  // Prefer a network we have banks for, so the issuer never falls back to a
+  // foreign list.
+  const availableNetworks = networksForCountry.filter((n) => CARD_BANKS[spec.code]?.[n]?.length);
+  const issuer = rng.pick(availableNetworks.length ? availableNetworks : networksForCountry);
+  const countryBankList: string[] | undefined = CARD_BANKS[spec.code]?.[issuer];
   const cardNumber = makeCardNumber(issuer, rng);
   const expYear = rng.int(today.getFullYear() + 1, today.getFullYear() + 5);
   const expMonth = rng.int(1, 12);
@@ -552,7 +635,38 @@ export function generateIdentity(
 
   /* ---- employment ---- */
   const jobTitle = name.job.length ? rng.pick(name.job) : "Specialist";
-  const company = `${rng.pick(["Northwind", "Acme", "Vertex", "Lumen", "Nimbus", "Orbit", "Keystone", "Meridian"])} ${rng.pick(["Systems", "Labs", "Group", "Partners", "Digital", "Solutions"])} ${rng.pick(["Inc", "Ltd", "LLC", "GmbH", "S.A."])}`;
+  /*
+   * Company names follow the country's own conventions. Building every name
+   * from English components ("Nimbus Digital Ltd") is implausible on a Chinese
+   * or Korean record, so countries with their own corporate naming get it.
+   */
+  const cw = COMPANY_WORDS[spec.code];
+  /*
+   * Legal suffixes are jurisdiction-specific: a GmbH exists in Germany and
+   * Austria, not in Australia or Canada. Where a country has no entry of its
+   * own the suffix is chosen from its own list rather than the German-heavy
+   * shared default, which produced "Nimbus Group GmbH" for an Australian
+   * record.
+   */
+  const LEGAL_SUFFIX: Record<string, string[]> = {
+    US: ["Inc.", "LLC", "Corp.", "Co."],
+    CA: ["Inc.", "Ltd.", "Corp."],
+    GB: ["Ltd", "PLC", "LLP"],
+    AU: ["Pty Ltd", "Ltd"],
+    NZ: ["Ltd", "Limited"],
+    IE: ["Ltd", "Teoranta"],
+    IN: ["Pvt. Ltd.", "Limited"],
+    ZA: ["(Pty) Ltd", "Ltd"],
+    SG: ["Pte. Ltd.", "Ltd."],
+    MY: ["Sdn. Bhd.", "Bhd."],
+    PH: ["Inc.", "Corp."],
+  };
+  const suffix = LEGAL_SUFFIX[spec.code] ?? ["Ltd"];
+  const company = cw
+    ? /[\u3000-\u9FFF\uAC00-\uD7AF]/.test(cw.suffixes[0])
+      ? `${rng.pick(cw.stems)}${rng.pick(cw.suffixes)}`
+      : `${rng.pick(cw.stems)} ${rng.pick(cw.suffixes)}`
+    : `${rng.pick(["Northwind", "Acme", "Vertex", "Lumen", "Nimbus", "Orbit", "Keystone", "Meridian"])} ${rng.pick(["Systems", "Labs", "Group", "Partners", "Digital", "Solutions"])}, ${rng.pick(suffix)}`;
   const industry = rng.pick(INDUSTRIES);
   const experience = rng.pick(EXPERIENCE);
   const employment = rng.pick(EMPLOYMENT);
@@ -571,11 +685,24 @@ export function generateIdentity(
   const interests = rng.sample(spec.interests, rng.int(3, 5));
 
   /* ---- online ---- */
-  const username = (firstName + lastName + rng.int(10, 99))
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
-    .slice(0, 16);
-  const nickname = `${firstName} ${rng.pick(["Builds", "Codes", "Writes", "Explores", "Designs"])}`;
+  /*
+   * Usernames must be ASCII, and stripping a CJK name leaves nothing — which
+   * produced usernames that were just a two-digit number ("75"). Where the name
+   * yields no ASCII, a word pair seeded from the record is used instead, the
+   * same approach as the email local-part.
+   */
+  const usernameAscii = (firstName + lastName).toLowerCase().replace(/[^a-z0-9]/g, "");
+  const handleWords = [
+    "aurora", "bluebird", "cedar", "delta", "ember", "flint", "harbor", "ivory",
+    "juniper", "kestrel", "lumen", "meadow", "nimbus", "onyx", "pebble",
+    "quartz", "river", "sable", "timber", "umber", "willow", "aspen", "birch",
+  ];
+  const username = (
+    usernameAscii || `${rng.pick(handleWords)}${rng.pick(handleWords)}`
+  )
+    .slice(0, 14) + String(rng.int(10, 99));
+
+  const nickname = `${firstName}${rng.chance(0.5) ? "" : " "}${rng.pick(["Builds", "Codes", "Writes", "Explores", "Designs"])}`;
   const website = `${username}.${rng.pick(WEBSITE_TLDS)}`;
   const browser = rng.pick(BROWSERS);
   const os = rng.pick(OSES);
@@ -627,7 +754,7 @@ export function generateIdentity(
     { key: "cardExpiry", group: "credit", label: l10n("有效期", "Expiry", "有効期限", "유효기간"), value: `${pad(expMonth)}/${String(expYear).slice(2)}` },
     { key: "cardCvv", group: "credit", label: l10n("安全码", "CVV", "セキュリティコード", "CVV"), value: cvv, sensitive: true },
     { key: "cardHolder", group: "credit", label: l10n("持卡人", "Cardholder", "カード名義", "카드 소유자"), value: fullName },
-    { key: "cardBank", group: "credit", label: l10n("发卡行", "Issuing Bank", "発行銀行", "발급 은행"), value: rng.pick(CREDIT_ISSUERS[issuer] ?? ["BANK"]) },
+    { key: "cardBank", group: "credit", label: l10n("发卡行", "Issuing Bank", "発行銀行", "발급 은행"), value: rng.pick(countryBankList ?? CREDIT_ISSUERS[issuer] ?? ["BANK"]) },
     { key: "currency", group: "credit", label: l10n("货币", "Currency", "通貨", "통화"), value: spec.currency },
 
     // education

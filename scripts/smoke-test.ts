@@ -9,7 +9,7 @@
  *   or: npx tsx scripts/smoke-test.ts
  */
 
-import { COUNTRY_CODES, COUNTRY_BY_CODE } from "../src/lib/registry.ts";
+import { COUNTRY_CODES, COUNTRY_BY_CODE, CARD_BANKS } from "../src/lib/registry.ts";
 import { loadCountryData, loadNamePool, availableCountries, totalCityCount, totalDivisionCount } from "../src/lib/data.ts";
 import { generateIdentity } from "../src/lib/generator/index.ts";
 import { randomSeed } from "../src/lib/generator/rng.ts";
@@ -528,6 +528,322 @@ console.log("\n=== no ASCII place names inside CJK addresses ===");
 
   check(bad === 0, `${bad}/${checked} CJK addresses mix ASCII into a CJK string`);
   console.log(`  ${checked - bad}/${checked} CJK addresses contain no glued ASCII`);
+  for (const e of examples) console.log(`    ${e}`);
+}
+
+console.log("\n=== generated values match country conventions ===");
+{
+  /*
+   * These are the rules a real number, name or handle obeys in each country.
+   * They were all violated before: "+86 097 9130 7567" is not a Chinese mobile,
+   * "泽洋 廖" reverses the name order, and a username of "75" is what remains
+   * after stripping a CJK name to ASCII.
+   */
+  const MOBILE_RE: Record<string, RegExp> = {
+    CN: /^\+86 1[3-9]\d \d{4} \d{4}$/,
+    US: /^\+1 [2-9]\d{2} \d{3} \d{4}$/,
+    GB: /^\+44 7\d{3} \d{6}$/,
+    JP: /^\+81 [789]0 \d{4} \d{4}$/,
+    KR: /^\+82 10 \d{4} \d{4}$/,
+    DE: /^\+49 1[5-7]\d \d{7}$/,
+    FR: /^\+33 [67] \d{2} \d{2} \d{2} \d{2}$/,
+    IN: /^\+91 [6-9]\d{4} \d{5}$/,
+    RU: /^\+7 9\d{2} \d{3} \d{2} \d{2}$/,
+    // Vietnamese mobiles: the international form drops the domestic trunk 0,
+    // leaving a 2-digit network prefix plus 7 digits, displayed 3-3-3.
+    VN: /^\+84 [35789]\d{2} \d{3} \d{3}$/,
+    TH: /^\+66 [689]\d \d{3} \d{4}$/,
+    MY: /^\+60 1\d \d{4} \d{4}$/,
+    ID: /^\+62 8\d{2} \d{3} \d{4}$/,
+  };
+
+  let checked = 0;
+  let bad = 0;
+  const examples: string[] = [];
+
+  for (const [code, re] of Object.entries(MOBILE_RE)) {
+    const spec = COUNTRY_BY_CODE[code];
+    const data = getCountryData(code);
+    if (!spec || !data) continue;
+    const name = getNamePool(code);
+    for (let i = 0; i < 25; i++) {
+      const id = generateIdentity(spec, { name, countryData: data }, { country: code, seed: randomSeed() });
+      checked++;
+      if (!re.test(id.map.phone ?? "")) {
+        bad++;
+        if (examples.length < 6) examples.push(`${code}: ${id.map.phone}  expected ${re.source}`);
+      }
+    }
+  }
+  check(bad === 0, `${bad}/${checked} phone numbers do not match their country's real format`);
+  console.log(`  ${checked - bad}/${checked} phone numbers match real mobile formats`);
+  for (const e of examples) console.log(`    ${e}`);
+}
+
+{
+  /*
+   * Family-name-first countries must not be reversed, and must not carry a
+   * middle name drawn from faker's English fallback pool.
+   *
+   * Chinese, Japanese, Korean and Taiwanese names are written unbroken
+   * (廖泽洋); Vietnamese and Thai names keep spaces (Ngô Nhật Linh), so the
+   * check is on the specific defects: a reversed order, or a name whose parts
+   * include something that is not in the country's own name pool.
+   */
+  const NO_SPACE = ["CN", "JP", "KR", "TW", "HK", "MO"];
+  const WITH_SPACE = ["VN", "TH"];
+  let checked = 0;
+  let bad = 0;
+  const examples: string[] = [];
+
+  for (const code of [...NO_SPACE, ...WITH_SPACE]) {
+    const spec = COUNTRY_BY_CODE[code];
+    const data = getCountryData(code);
+    if (!spec || !data) continue;
+    const name = getNamePool(code);
+    const pool = new Set([...name.first, ...name.last]);
+
+    for (let i = 0; i < 25; i++) {
+      const id = generateIdentity(spec, { name, countryData: data }, { country: code, seed: randomSeed() });
+      checked++;
+      const full = id.map.fullName ?? "";
+
+      // Unbroken scripts must contain no space at all.
+      if (NO_SPACE.includes(code) && /\s/.test(full)) {
+        bad++;
+        if (examples.length < 6) examples.push(`${code}: ${JSON.stringify(full)} (space in unbroken name)`);
+        continue;
+      }
+
+      /*
+       * Vietnamese and Thai names are the family name followed by one or more
+       * given-name words ("Phan Bạch Cúc"), so splitting on spaces and checking
+       * every token against the pool is wrong — the given name is itself
+       * multi-word. The check is instead that the string begins with a known
+       * family name and that the remainder is non-empty.
+       */
+      const family = name.last.find((l) => full.startsWith(l));
+      const givenPart = family ? full.slice(family.length).trim() : "";
+      if (!family || !givenPart) {
+        bad++;
+        if (examples.length < 6) examples.push(`${code}: ${JSON.stringify(full)}`);
+      }
+    }
+  }
+  check(bad === 0, `${bad}/${checked} family-name-first names are malformed`);
+  console.log(`  ${checked - bad}/${checked} family-name-first names use only native name parts`);
+  for (const e of examples) console.log(`    ${e}`);
+}
+
+{
+  // Usernames and emails must be non-empty ASCII handles, not bare numbers.
+  let checked = 0;
+  let bad = 0;
+  const examples: string[] = [];
+  const OK = /^[a-z][a-z0-9]{2,}$/;
+
+  for (const code of COUNTRY_CODES) {
+    const spec = COUNTRY_BY_CODE[code];
+    const data = getCountryData(code);
+    if (!spec || !data) continue;
+    const name = getNamePool(code);
+    for (let i = 0; i < 10; i++) {
+      const id = generateIdentity(spec, { name, countryData: data }, { country: code, seed: randomSeed() });
+      checked++;
+      const u = id.map.username ?? "";
+      if (!OK.test(u)) {
+        bad++;
+        if (examples.length < 6) examples.push(`${code}: ${JSON.stringify(u)}`);
+      }
+    }
+  }
+  check(bad === 0, `${bad}/${checked} usernames are not usable ASCII handles`);
+  console.log(`  ${checked - bad}/${checked} usernames are usable ASCII handles`);
+  for (const e of examples) console.log(`    ${e}`);
+}
+
+{
+  // Job titles must be in the country's own language where the script is not
+  // Latin — a Chinese record with an English job title is the defect.
+  const NON_LATIN = ["CN", "TW", "HK", "MO", "JP", "KR", "TH", "VN", "RU", "AE", "SA", "IL"];
+  const LATIN = /^[\x20-\x7E]+$/;
+  let checked = 0;
+  let bad = 0;
+  const examples: string[] = [];
+
+  for (const code of NON_LATIN) {
+    const spec = COUNTRY_BY_CODE[code];
+    const data = getCountryData(code);
+    if (!spec || !data) continue;
+    const name = getNamePool(code);
+    for (let i = 0; i < 12; i++) {
+      const id = generateIdentity(spec, { name, countryData: data }, { country: code, seed: randomSeed() });
+      checked++;
+      const job = id.map.jobTitle ?? "";
+      if (LATIN.test(job)) {
+        bad++;
+        if (examples.length < 6) examples.push(`${code}: ${JSON.stringify(job)}`);
+      }
+    }
+  }
+  check(bad === 0, `${bad}/${checked} job titles are still English for non-Latin countries`);
+  console.log(`  ${checked - bad}/${checked} job titles use the country's own script`);
+  for (const e of examples) console.log(`    ${e}`);
+}
+
+{
+  /*
+   * A card's issuing bank must operate in the holder's country, and its network
+   * must be one people there actually carry. Both were drawn from global lists,
+   * so a German record showed "BANK OF AMERICA" and a Chinese one a JCB card.
+   */
+  const KNOWN_BANKS: Record<string, string[]> = {};
+  for (const [cc, byNetwork] of Object.entries(CARD_BANKS)) {
+    KNOWN_BANKS[cc] = Object.values(byNetwork).flat();
+  }
+
+  let checked = 0;
+  let bad = 0;
+  const examples: string[] = [];
+
+  for (const cc of COUNTRY_CODES) {
+    const known = KNOWN_BANKS[cc];
+    if (!known) continue;
+    const spec = COUNTRY_BY_CODE[cc];
+    const data = getCountryData(cc);
+    if (!spec || !data) continue;
+    const name = getNamePool(cc);
+
+    for (let i = 0; i < 12; i++) {
+      const id = generateIdentity(spec, { name, countryData: data }, { country: cc, seed: randomSeed() });
+      checked++;
+      const bank = id.map.cardBank ?? "";
+      if (!known.includes(bank)) {
+        bad++;
+        if (examples.length < 6) examples.push(`${cc}: ${bank}`);
+      }
+    }
+  }
+  check(bad === 0, `${bad}/${checked} issuing banks do not belong to the cardholder's country`);
+  console.log(`  ${checked - bad}/${checked} issuing banks match the holder's country`);
+  for (const e of examples) console.log(`    ${e}`);
+}
+
+{
+  /*
+   * Company names must not glue two Latin words together ("WeberGmbH & Co.
+   * KG"), and must use a legal form that exists in the holder's jurisdiction —
+   * a GmbH belongs in Germany, not Australia.
+   *
+   * A camel-case test would work for the first part but flags legitimately
+   * capitalised brands such as "Deutsche Bank", so the check is that no known
+   * suffix appears without a preceding space.
+   */
+  const SUFFIXES = ["GmbH", "AG", "Ltd", "LLC", "Inc.", "S.A.", "Ltda.", "Pty", "Sdn.", "Pte.", "Corp."];
+  const FOREIGN_SUFFIX: Record<string, string[]> = {
+    // Countries where a German or Brazilian form would be wrong.
+    AU: ["GmbH", "AG"], NZ: ["GmbH", "AG"], GB: ["GmbH", "AG"], IE: ["GmbH", "AG"],
+    CA: ["GmbH", "AG"], US: ["GmbH", "AG"], SG: ["GmbH", "S.A."], MY: ["GmbH", "S.A."],
+    IN: ["GmbH", "S.A."], ZA: ["GmbH"], CN: ["GmbH", "Ltd"],
+  };
+
+  let checked = 0;
+  let bad = 0;
+  const examples: string[] = [];
+
+  for (const cc of COUNTRY_CODES) {
+    const spec = COUNTRY_BY_CODE[cc];
+    const data = getCountryData(cc);
+    if (!spec || !data) continue;
+    const name = getNamePool(cc);
+
+    for (let i = 0; i < 8; i++) {
+      const id = generateIdentity(spec, { name, countryData: data }, { country: cc, seed: randomSeed() });
+      checked++;
+      const co = id.map.company ?? "";
+
+      // A suffix is "glued" when a letter runs straight into another letter
+      // across a word boundary — the signature of "WeberGmbH". The test is a
+      // lowercase letter immediately followed by an uppercase one, excluding
+      // known brand-style capitalisation by requiring the uppercase run to be a
+      // suffix we know.
+      const glued = SUFFIXES.some((s) => {
+        const re = new RegExp(`[a-z]${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "");
+        return re.test(co);
+      });
+      const foreign = (FOREIGN_SUFFIX[cc] ?? []).some((s) => co.includes(s));
+
+      if (glued || foreign) {
+        bad++;
+        if (examples.length < 6) examples.push(`${cc}: ${co}${glued ? " (glued)" : " (foreign legal form)"}`);
+      }
+    }
+  }
+  check(bad === 0, `${bad}/${checked} company names are malformed or use a foreign legal form`);
+  console.log(`  ${checked - bad}/${checked} company names are well-formed and locally valid`);
+  for (const e of examples) console.log(`    ${e}`);
+}
+
+{
+  /*
+   * Names must be written in the country's own script. Hong Kong's faker chain
+   * began with en_HK, so it produced "羅Marilou" — an English given name glued
+   * to a Chinese surname. Any name in a CJK country containing Latin letters is
+   * that defect.
+   */
+  const CJK_COUNTRIES = ["CN", "TW", "HK", "MO", "JP", "KR", "TH"];
+  const LATIN = /[A-Za-z]/;
+  let checked = 0;
+  let bad = 0;
+  const examples: string[] = [];
+
+  for (const code of CJK_COUNTRIES) {
+    const spec = COUNTRY_BY_CODE[code];
+    const data = getCountryData(code);
+    if (!spec || !data) continue;
+    const name = getNamePool(code);
+    for (let i = 0; i < 25; i++) {
+      const id = generateIdentity(spec, { name, countryData: data }, { country: code, seed: randomSeed() });
+      checked++;
+      const full = id.map.fullName ?? "";
+      if (LATIN.test(full)) {
+        bad++;
+        if (examples.length < 6) examples.push(`${code}: ${JSON.stringify(full)}`);
+      }
+    }
+  }
+  check(bad === 0, `${bad}/${checked} names in CJK countries contain Latin letters`);
+  console.log(`  ${checked - bad}/${checked} CJK names use only the local script`);
+  for (const e of examples) console.log(`    ${e}`);
+}
+
+{
+  /*
+   * Brazilian addresses carry the state abbreviation, not the numeric division
+   * code: "São Paulo - SP". Records previously read "Cascavel - 18".
+   */
+  const spec = COUNTRY_BY_CODE["BR"];
+  const data = getCountryData("BR");
+  let checked = 0;
+  let bad = 0;
+  const examples: string[] = [];
+
+  if (spec && data) {
+    const name = getNamePool("BR");
+    const UFS = new Set(["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"]);
+    for (let i = 0; i < 30; i++) {
+      const id = generateIdentity(spec, { name, countryData: data }, { country: "BR", seed: randomSeed(), lang: "en" });
+      checked++;
+      const addr = id.map.fullAddress ?? "";
+      const m = / - ([A-Z]{2})\b/.exec(addr);
+      if (!m || !UFS.has(m[1])) {
+        bad++;
+        if (examples.length < 4) examples.push(JSON.stringify(addr.split("\n")[1] ?? addr));
+      }
+    }
+  }
+  check(bad === 0, `${bad}/${checked} Brazilian addresses lack a valid state abbreviation`);
+  console.log(`  ${checked - bad}/${checked} Brazilian addresses carry a real UF`);
   for (const e of examples) console.log(`    ${e}`);
 }
 

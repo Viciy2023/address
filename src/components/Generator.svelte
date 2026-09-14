@@ -37,7 +37,6 @@
   let division = "";
   let gender: "any" | "male" | "female" = "any";
   let identity: Identity | null = null;
-  let avatarUrl = "";
   let busy = true;
   let error = "";
 
@@ -74,12 +73,11 @@
         lang,
       });
 
-      /* Avatar: faker's personPortrait set is AI-generated fictional people,
-         served from jsDelivr. Chosen over faker.image.avatar() because that
-         returns real GitHub users' photos. */
-      const sex = identity.summary.gender === "Female" ? "female" : "male";
-      const idx = parseInt(identity.summary.avatarSeed.slice(0, 6), 36) % 100;
-      avatarUrl = `https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/${sex}/256/${idx}.jpg`;
+      /* Avatar: a flat SVG illustration drawn from the record's own seed.
+         Nothing is fetched — the previous implementation loaded a
+         photorealistic portrait from a CDN, which both looked like a real
+         person and contradicted the site's statement that everything happens
+         locally. */
       error = "";
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -175,7 +173,7 @@
     <p class="error" role="alert">{error}</p>
   {/if}
 
-  <ResultPanel {s} {lang} {identity} {avatarUrl} />
+  <ResultPanel {s} {lang} {identity} />
 </div>
 
 <style>

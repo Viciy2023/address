@@ -21,6 +21,18 @@
 import fs from "node:fs";
 import path from "node:path";
 import { allFakers } from "@faker-js/faker";
+import { JOB_TITLES } from "./data/job-titles.mjs";
+
+/**
+ * Countries that use a middle name. Mirrors FAMILY_NAME_FIRST / USES_MIDDLE_NAME
+ * in src/lib/registry.ts; duplicated here because this script runs under plain
+ * node and cannot import TypeScript.
+ */
+const USES_MIDDLE_NAME_SET = new Set([
+  "US", "CA", "GB", "AU", "NZ", "IE",
+  "DE", "FR", "IT", "ES", "PT", "NL", "SE", "NO", "PL",
+  "RU", "BR", "MX", "ZA", "IN", "PH",
+]);
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const OUT_DIR = path.join(ROOT, "src", "data", "names");
@@ -45,8 +57,14 @@ const LOCALE_MAP = {
   RU: ["ru"],
   CN: ["zh_CN"],
   TW: ["zh_TW"],
-  HK: ["en_HK", "zh_TW"],
-  MO: ["pt_PT", "zh_TW"],
+  // Hong Kong names are Chinese (陳大文) with a romanised surname. faker's
+  // en_HK locale supplies English given names, which produced "羅Marilou" —
+  // an English first name glued to a Chinese surname. zh_TW supplies the
+  // Chinese given names and the romanised surnames both fit.
+  HK: ["zh_TW"],
+  // Macau uses Chinese surnames with Portuguese-influenced romanisation; the
+  // Chinese pool is the safer base.
+  MO: ["zh_TW"],
   JP: ["ja"],
   KR: ["ko"],
   IN: ["en_IN"],
@@ -121,6 +139,29 @@ for (const [cc, chain] of Object.entries(LOCALE_MAP)) {
   for (const key of Object.keys(LIMITS)) {
     const unique = [...new Set(pools[key])];
     entry[key] = sample(unique, LIMITS[key]);
+  }
+
+  /*
+   * Replace the job pool with the country's own titles wherever we have them.
+   *
+   * faker lacks job-title data for most non-English locales, so `jobTitle()`
+   * returned its English fallback — "Human Branding Strategist" for a Chinese
+   * record, and "Dynamic Factors تنفيذي" for an Emirati one. Those read as
+   * broken, not merely untranslated.
+   */
+  if (JOB_TITLES[cc]) {
+    entry.job = [...JOB_TITLES[cc]];
+  }
+
+  /*
+   * `middleName` is an English-only concept in faker: the zh_CN, ja and ko
+   * locales have no such field, so it fell back to the default locale and
+   * produced English middle names inside Chinese, Japanese and Korean names.
+   * The record no longer uses a middle name for those countries, so the pool is
+   * emptied rather than shipping data that must never be drawn.
+   */
+  if (!USES_MIDDLE_NAME_SET.has(cc)) {
+    entry.middle = [];
   }
 
   result[cc] = entry;

@@ -150,6 +150,241 @@ export const CN_GB2260_PREFIX: Record<string, string> = {
 const L = (zh: string, en: string, ja: string, ko: string): LocalizedText => ({ zh, en, ja, ko });
 
 /* ------------------------------------------------------------------ */
+/* Naming conventions                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Issuing banks per country, keyed by card network.
+ *
+ * The generator previously drew the bank from one global list, so a German
+ * record could show "BANK OF AMERICA" and a Chinese one "WELLS FARGO". A card's
+ * issuer has to be a bank that actually operates in the holder's country.
+ *
+ * Networks are ordered by local relevance: UnionPay leads in China, JCB in
+ * Japan, Visa/Mastercard elsewhere.
+ */
+/**
+ * GeoNames admin-1 code -> Brazilian state abbreviation (UF).
+ *
+ * Brazilian addresses are written "City - UF", using the official two-letter
+ * abbreviation (São Paulo - SP). The address template referenced {stateCode},
+ * which in this dataset is GeoNames' numeric code, so records were emitted as
+ * "Cascavel - 18" — not a form that exists.
+ *
+ * The mapping was derived from the IBGE municipality codes carried in
+ * GeoNames' Brazilian postal dump, not assumed from alphabetical order (which
+ * gives the wrong answer: GeoNames "18" is Paraná, not Paraíba).
+ */
+export const BR_UF: Record<string, string> = {
+  "01": "AC",
+  "02": "AL",
+  "03": "AP",
+  "04": "AM",
+  "05": "BA",
+  "06": "CE",
+  "07": "DF",
+  "08": "ES",
+  "11": "MS",
+  "13": "MA",
+  "14": "MT",
+  "15": "MG",
+  "16": "PA",
+  "17": "PB",
+  "18": "PR",
+  "20": "PI",
+  "21": "RJ",
+  "22": "RN",
+  "23": "RS",
+  "24": "RO",
+  "25": "RR",
+  "26": "SC",
+  "27": "SP",
+  "28": "SE",
+  "29": "GO",
+  "30": "PE",
+  "31": "TO",
+};
+
+export const CARD_BANKS: Record<string, Record<string, string[]>> = {
+  CN: { UnionPay: ["中国工商银行", "中国建设银行", "中国银行", "中国农业银行", "招商银行", "交通银行"] },
+  TW: { Visa: ["國泰世華銀行", "中國信託銀行", "台新銀行"], Mastercard: ["玉山銀行", "富邦銀行"], JCB: ["合作金庫銀行"] },
+  HK: { Visa: ["滙豐銀行", "中國銀行（香港）", "恒生銀行"], Mastercard: ["渣打銀行", "東亞銀行"] },
+  MO: { Visa: ["大西洋銀行", "中國銀行澳門分行"], Mastercard: ["澳門國際銀行"] },
+  JP: { JCB: ["三菱UFJ銀行", "三井住友銀行", "みずほ銀行"], Visa: ["楽天銀行", "ゆうちょ銀行"], Mastercard: ["三井住友カード"] },
+  KR: { Visa: ["국민은행", "신한은행", "우리은행"], Mastercard: ["하나은행", "농협은행"], Amex: ["삼성카드"] },
+  US: { Visa: ["Chase Bank", "Bank of America", "Wells Fargo", "Capital One"], Mastercard: ["Citibank", "Synchrony Bank"], Amex: ["American Express"], Discover: ["Discover Bank"] },
+  CA: { Visa: ["RBC Royal Bank", "TD Canada Trust", "Scotiabank"], Mastercard: ["BMO Bank of Montreal", "CIBC"], Amex: ["American Express Canada"] },
+  GB: { Visa: ["Barclays", "Lloyds Bank", "NatWest", "Santander UK"], Mastercard: ["HSBC UK", "Halifax"], Amex: ["American Express UK"] },
+  AU: { Visa: ["Commonwealth Bank", "Westpac", "ANZ"], Mastercard: ["NAB", "Macquarie"], Amex: ["American Express Australia"] },
+  NZ: { Visa: ["ANZ New Zealand", "BNZ", "Westpac NZ"], Mastercard: ["ASB Bank", "Kiwibank"] },
+  DE: { Visa: ["Deutsche Bank", "Commerzbank", "DZ Bank"], Mastercard: ["Sparkasse", "Volksbank"], Amex: ["American Express Deutschland"] },
+  FR: { Visa: ["BNP Paribas", "Société Générale", "Crédit Agricole"], Mastercard: ["Crédit Mutuel", "La Banque Postale"] },
+  IT: { Visa: ["UniCredit", "Intesa Sanpaolo"], Mastercard: ["Banco BPM", "BPER Banca"] },
+  ES: { Visa: ["Banco Santander", "BBVA", "CaixaBank"], Mastercard: ["Banco Sabadell", "Bankinter"] },
+  PT: { Visa: ["Millennium BCP", "Caixa Geral de Depósitos"], Mastercard: ["Novo Banco", "Banco BPI"] },
+  NL: { Visa: ["ING Bank", "Rabobank"], Mastercard: ["ABN AMRO", "SNS Bank"] },
+  SE: { Visa: ["Swedbank", "SEB"], Mastercard: ["Nordea", "Handelsbanken"] },
+  NO: { Visa: ["DNB", "Nordea Norge"], Mastercard: ["SpareBank 1", "Sbanken"] },
+  PL: { Visa: ["PKO Bank Polski", "Pekao SA"], Mastercard: ["mBank", "ING Bank Śląski"] },
+  RU: { Visa: ["Сбербанк", "ВТБ", "Альфа-Банк"], Mastercard: ["Тинькофф Банк", "Газпромбанк"] },
+  IN: { Visa: ["HDFC Bank", "ICICI Bank", "State Bank of India"], Mastercard: ["Axis Bank", "Kotak Mahindra Bank"] },
+  ID: { Visa: ["Bank Mandiri", "BCA", "BNI"], Mastercard: ["Bank BRI", "CIMB Niaga"] },
+  MY: { Visa: ["Maybank", "CIMB Bank", "Public Bank"], Mastercard: ["RHB Bank", "Hong Leong Bank"] },
+  SG: { Visa: ["DBS Bank", "OCBC Bank", "UOB"], Mastercard: ["Standard Chartered Singapore", "HSBC Singapore"] },
+  TH: { Visa: ["Kasikornbank", "Siam Commercial Bank", "Bangkok Bank"], Mastercard: ["Krungthai Bank", "TMBThanachart Bank"] },
+  VN: { Visa: ["Vietcombank", "BIDV", "VietinBank"], Mastercard: ["Techcombank", "ACB"] },
+  AE: { Visa: ["Emirates NBD", "First Abu Dhabi Bank", "Mashreq Bank"], Mastercard: ["Abu Dhabi Commercial Bank", "Dubai Islamic Bank"] },
+  SA: { Visa: ["Al Rajhi Bank", "Riyad Bank", "SABB"], Mastercard: ["Banque Saudi Fransi", "Alinma Bank"] },
+  IL: { Visa: ["Bank Leumi", "Bank Hapoalim", "Discount Bank"], Mastercard: ["Mizrahi-Tefahot", "Isracard"] },
+  TR: { Visa: ["Ziraat Bankası", "İş Bankası", "Garanti BBVA"], Mastercard: ["Yapı Kredi", "Akbank"] },
+  BR: { Visa: ["Banco do Brasil", "Itaú Unibanco", "Bradesco"], Mastercard: ["Santander Brasil", "Nubank"] },
+  MX: { Visa: ["BBVA México", "Banorte", "Santander México"], Mastercard: ["Banco Azteca", "HSBC México"] },
+  ZA: { Visa: ["Standard Bank", "FNB", "Absa"], Mastercard: ["Nedbank", "Capitec Bank"] },
+};
+
+/**
+ * Card networks by local relevance. UnionPay dominates China, JCB leads Japan,
+ * and the rest use the international schemes people there actually carry.
+ */
+export const CARD_NETWORKS: Record<string, string[]> = {
+  CN: ["UnionPay", "Visa", "Mastercard"],
+  TW: ["Visa", "Mastercard", "JCB"],
+  HK: ["Visa", "Mastercard"],
+  MO: ["Visa", "Mastercard"],
+  JP: ["JCB", "Visa", "Mastercard", "Amex"],
+  KR: ["Visa", "Mastercard", "Amex"],
+  US: ["Visa", "Mastercard", "Amex", "Discover"],
+  CA: ["Visa", "Mastercard", "Amex"],
+  GB: ["Visa", "Mastercard", "Amex"],
+  AU: ["Visa", "Mastercard", "Amex"],
+  NZ: ["Visa", "Mastercard"],
+  DE: ["Visa", "Mastercard", "Amex"],
+  FR: ["Visa", "Mastercard"],
+  IT: ["Visa", "Mastercard"],
+  ES: ["Visa", "Mastercard"],
+  PT: ["Visa", "Mastercard"],
+  NL: ["Visa", "Mastercard"],
+  SE: ["Visa", "Mastercard"],
+  NO: ["Visa", "Mastercard"],
+  PL: ["Visa", "Mastercard"],
+  RU: ["Visa", "Mastercard"],
+  IN: ["Visa", "Mastercard"],
+  ID: ["Visa", "Mastercard"],
+  MY: ["Visa", "Mastercard"],
+  SG: ["Visa", "Mastercard"],
+  TH: ["Visa", "Mastercard"],
+  VN: ["Visa", "Mastercard"],
+  AE: ["Visa", "Mastercard"],
+  SA: ["Visa", "Mastercard"],
+  IL: ["Visa", "Mastercard"],
+  TR: ["Visa", "Mastercard"],
+  BR: ["Visa", "Mastercard"],
+  MX: ["Visa", "Mastercard"],
+  ZA: ["Visa", "Mastercard"],
+};
+
+/**
+ * Countries that write the family name first.
+ *
+ * Composing "given family" everywhere produced "泽洋 廖" for China, where the
+ * correct form is 廖泽洋. Hungarian is the one European language that also puts
+ * the family name first.
+ */
+export const FAMILY_NAME_FIRST = new Set([
+  "CN", "JP", "KR", "TW", "HK", "MO", "VN", "TH",
+]);
+
+/**
+ * Family-name-first countries that also write without spaces between the parts.
+ *
+ * Chinese, Japanese, Korean and Taiwanese names are written as one unbroken
+ * string (廖泽洋). Vietnamese and Thai names keep spaces ("Ngô Nhật Linh").
+ * Joining every family-first name without a space produced "NgôNhật Linh".
+ */
+export const NAME_NO_SPACE = new Set(["CN", "JP", "KR", "TW", "HK", "MO"]);
+
+/**
+ * Whether a second given name is conventional.
+ *
+ * Most CJK and Southeast Asian names have no middle-name slot at all. faker has
+ * no `middleName` for `zh_CN`, `ja` or `ko`, so it silently fell back to its
+ * English default and produced names like "泽洋 Charlie 廖" — an English middle
+ * name inside a Chinese name.
+ */
+export const USES_MIDDLE_NAME = new Set([
+  "US", "CA", "GB", "AU", "NZ", "IE",
+  "DE", "FR", "IT", "ES", "PT", "NL", "SE", "NO", "PL",
+  "RU", "BR", "MX", "ZA", "IN", "PH",
+]);
+
+/**
+ * Real mobile prefixes per country, keyed by country code.
+ *
+ * A random digit string is not a phone number. Chinese mobiles begin 1, UK
+ * mobiles 7, Korean 010, German 015x/016x/017x. Without these the generator
+ * emitted "+86 097 9130 7567", which is not assignable.
+ *
+ * Values are the leading digits kept verbatim; the rest of the national number
+ * is random. Where a country's mobile numbering is a single block, one entry is
+ * enough.
+ */
+export const COMPANY_WORDS: Record<string, { stems: string[]; suffixes: string[] }> = {
+  CN: { stems: ["华信", "远东", "中科", "华夏", "宏图", "万通", "联创", "恒基", "金桥", "新宇"], suffixes: ["科技有限公司", "贸易有限公司", "实业有限公司", "信息技术有限公司"] },
+  TW: { stems: ["宏達", "聯發", "台積", "鴻海", "大同", "統一", "遠東", "裕隆"], suffixes: ["科技股份有限公司", "實業股份有限公司", "貿易股份有限公司"] },
+  HK: { stems: ["長江", "和記", "新鴻基", "恒基", "太古", "怡和"], suffixes: ["有限公司", "集團有限公司", "國際有限公司"] },
+  MO: { stems: ["澳門", "葡京", "永利", "銀河", "金沙"], suffixes: ["有限公司", "集團有限公司"] },
+  JP: { stems: ["富士", "田中", "三菱", "住友", "伊藤", "山田", "中村"], suffixes: ["株式会社", "有限会社", "工業株式会社"] },
+  KR: { stems: ["한성", "대양", "신한", "현대", "동방", "서울"], suffixes: ["주식회사", "(주)", "산업(주)"] },
+  TH: { stems: ["สยาม", "ไทย", "เจริญ", "รุ่งเรือง", "ศรี"], suffixes: ["จำกัด", "จำกัด (มหาชน)"] },
+  VN: { stems: ["An Phát", "Thành Đạt", "Hồng Hà", "Minh Long", "Đại Việt"], suffixes: ["Công ty TNHH", "Công ty Cổ phần"] },
+  AE: { stems: ["الفهد", "النور", "الخليج", "الوطنية"], suffixes: ["ذ.م.م", "ش.م.ل"] },
+  SA: { stems: ["الفهد", "النور", "الخليج", "الوطنية"], suffixes: ["ذ.م.م", "ش.م.ب"] },
+  IL: { stems: ["כהן", "לוי", "מזרחי", "שרון"], suffixes: ["בע\"מ", "ניהול"] },
+  RU: { stems: ["Газтех", "Росэнерго", "Строймонтаж", "ТехноПром", "Северсталь"], suffixes: ["ООО", "АО", "ЗАО"] },
+  DE: { stems: ["Müller", "Schmidt", "Weber", "Fischer", "Wagner"], suffixes: ["GmbH", "AG", "GmbH & Co. KG"] },
+  FR: { stems: ["Renault", "Peugeot", "Lafarge", "Danone", "Carrefour"], suffixes: ["S.A.", "S.A.R.L.", "S.A.S."] },
+  BR: { stems: ["Vale", "Petrobras", "Itaú", "Ambev", "Natura"], suffixes: ["S.A.", "Ltda.", "ME"] },
+  MX: { stems: ["Cemex", "Bimbo", "Femsa", "Televisa"], suffixes: ["S.A. de C.V.", "S. de R.L."] },
+};
+
+export const MOBILE_PREFIXES: Record<string, string[]> = {
+  US: ["201", "212", "305", "312", "404", "415", "469", "512", "617", "702", "713", "818", "919"],
+  CA: ["416", "514", "604", "613", "780", "902", "204", "306", "403"],
+  GB: ["7400", "7500", "7700", "7800", "7900", "7300", "7450"],
+  AU: ["400", "401", "410", "420", "430", "450", "490"],
+  NZ: ["21", "22", "27", "29"],
+  DE: ["151", "160", "170", "171", "175", "176", "179"],
+  FR: ["6", "7"],
+  IT: ["320", "330", "340", "347", "360", "380", "390"],
+  ES: ["600", "610", "620", "630", "640", "660", "680"],
+  PT: ["910", "920", "930", "960", "961", "962"],
+  NL: ["6"],
+  SE: ["70", "72", "73", "76", "79"],
+  NO: ["400", "410", "900", "910", "920", "930"],
+  PL: ["500", "510", "600", "690", "720", "780"],
+  RU: ["903", "905", "906", "909", "916", "926", "999"],
+  CN: ["130", "131", "133", "135", "136", "137", "138", "139", "150", "151", "152", "155", "156", "157", "158", "159", "166", "170", "173", "175", "176", "177", "178", "180", "181", "182", "183", "185", "186", "187", "188", "189", "199"],
+  TW: ["910", "911", "920", "921", "930", "950", "960", "970"],
+  HK: ["51", "52", "53", "54", "55", "60", "61", "62", "63", "64", "65", "66", "67", "68", "69", "90", "91", "92", "93", "94", "95", "96", "97", "98"],
+  MO: ["61", "62", "63", "66"],
+  JP: ["70", "80", "90"],
+  KR: ["10"],
+  IN: ["6", "7", "8", "9"],
+  ID: ["81", "82", "83", "85", "87", "88", "89"],
+  MY: ["11", "12", "13", "14", "16", "17", "18", "19"],
+  SG: ["8", "9"],
+  TH: ["6", "8", "9"],
+  VN: ["32", "33", "34", "35", "36", "37", "38", "39", "52", "56", "58", "70", "76", "77", "78", "79", "81", "82", "83", "84", "85", "86", "87", "88", "89", "90", "91", "92", "93", "94", "95", "96", "97", "98", "99"],
+  AE: ["50", "52", "54", "55", "56", "58"],
+  SA: ["5"],
+  IL: ["50", "52", "53", "54", "55", "58"],
+  TR: ["53", "54", "55", "56"],
+  BR: ["9"],
+  MX: ["55", "56", "81", "33"],
+  ZA: ["60", "71", "72", "73", "74", "81", "82", "83", "84"],
+};
+
+/* ------------------------------------------------------------------ */
 /* Shared pools, reused across countries to keep the registry compact.  */
 /* ------------------------------------------------------------------ */
 
@@ -978,6 +1213,9 @@ export const COUNTRIES: CountrySpec[] = [
     address: {
       template: ["{state}{city}{street}", "{postal}", "{country}"],
       adminLabel: L("縣 / 市", "County / City", "県 / 市", "현 / 시"),
+      streets: ["中山", "中正", "民生", "忠孝", "信義", "和平", "光復", "建國"],
+      streetSuffixes: ["路", "街", "大道"],
+      houseSuffix: "號",
     },
     id: {
       name: L("身分證統一編號", "National ID Number", "身分証番号", "신분증 번호"),
@@ -1025,6 +1263,9 @@ export const COUNTRIES: CountrySpec[] = [
     address: {
       template: ["{street}", "{state}", "{city}", "{country}"],
       adminLabel: L("區域", "District", "地区", "지역"),
+      streets: ["彌敦", "皇后大", "軒尼詩", "德輔", "乾諾", "亞皆老", "漆咸"],
+      streetSuffixes: ["道", "街", "里"],
+      houseSuffix: "號",
     },
     id: {
       name: L("香港身份證號碼", "Hong Kong Identity Card Number", "香港身分証番号", "홍콩 신분증 번호"),
@@ -1072,6 +1313,9 @@ export const COUNTRIES: CountrySpec[] = [
     address: {
       template: ["{street}", "{state}", "{city}", "{country}"],
       adminLabel: L("堂區", "Parish", "堂区", "교구"),
+      streets: ["新马路", "殷皇子大馬路", "南灣大馬路", "荷蘭園大馬路", "巴波沙大馬路"],
+      streetSuffixes: ["大馬路", "街", "巷"],
+      houseSuffix: "號",
     },
     id: {
       name: L("澳門居民身份證號碼", "Macao Resident Identity Card Number", "マカオ身分証番号", "마카오 신분증 번호"),
@@ -1307,7 +1551,7 @@ export const COUNTRIES: CountrySpec[] = [
     currency: "MYR",
     currencyLabel: L("RM", "RM", "RM", "RM"),
     locale: ["en", "en_IN"],
-    phone: { code: "60", nationalDigits: 9, groups: [2, 4, 4], trunkPrefix: "0" },
+    phone: { code: "60", nationalDigits: 10, groups: [2, 4, 4], trunkPrefix: "0" },
     postalStyle: "numeric5",
     postalDisabled: false,
     address: {
