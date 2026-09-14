@@ -961,5 +961,107 @@ console.log("\n=== generated values match country conventions ===");
   for (const e of examples) console.log(`    ${e}`);
 }
 
+{
+  /*
+   * Every field of every card must carry a real value, in all 34 countries.
+   *
+   * An audit across all nine cards found that a country without a middle name
+   * emitted "—" as its value, which reads as a field that failed to generate.
+   * The same sweep checks for empty strings and literal "undefined"/"null".
+   */
+  const PLACEHOLDERS = new Set(["", "—", "-", "undefined", "null", "N/A", "n/a"]);
+  let checked = 0;
+  let bad = 0;
+  const examples: string[] = [];
+
+  for (const code of COUNTRY_CODES) {
+    const spec = COUNTRY_BY_CODE[code];
+    const data = getCountryData(code);
+    if (!spec || !data) continue;
+    const name = getNamePool(code);
+
+    for (const seed of [11, 22, 33]) {
+      const id = generateIdentity(spec, { name, countryData: data }, { country: code, seed, lang: "zh" });
+
+      // All nine cards must be present.
+      if (id.groups.length !== 9) {
+        bad++;
+        examples.push(`${code}: ${id.groups.length} groups, expected 9`);
+      }
+
+      for (const g of id.groups) {
+        for (const f of g.fields) {
+          checked++;
+          if (PLACEHOLDERS.has((f.value ?? "").trim())) {
+            bad++;
+            if (examples.length < 6) examples.push(`${code} [${g.key}] ${f.key} = ${JSON.stringify(f.value)}`);
+          }
+        }
+      }
+
+      // Core fields must exist for every country.
+      const required = ["email", "phone", "fullAddress", "company", "school", "jobTitle", "idNumber"];
+      if (!spec.postalDisabled) required.push("postal");
+      for (const k of required) {
+        if (!id.map[k]) {
+          bad++;
+          if (examples.length < 6) examples.push(`${code}: missing ${k}`);
+        }
+      }
+    }
+  }
+
+  check(bad === 0, `${bad} fields are empty or placeholders across the nine cards`);
+  console.log(`  ${checked} field values across all countries are populated`);
+  for (const e of examples) console.log(`    ${e}`);
+}
+
+{
+  /*
+   * Names must be written in the country's own script. faker falls back to its
+   * English locale when the primary one lacks a field, which injected Latin
+   * names into Arabic pools and produced "Jeromy العواني".
+   */
+  const SCRIPT: Record<string, RegExp> = {
+    CN: /[\u4E00-\u9FFF]/, TW: /[\u4E00-\u9FFF]/, HK: /[\u4E00-\u9FFF]/, MO: /[\u4E00-\u9FFF]/,
+    JP: /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/,
+    KR: /[\uAC00-\uD7AF]/,
+    RU: /[\u0400-\u04FF]/,
+    SA: /[\u0600-\u06FF]/, AE: /[\u0600-\u06FF]/,
+    IL: /[\u0590-\u05FF]/,
+    TH: /[\u0E00-\u0E7F]/,
+  };
+  const OTHER_SCRIPTS = /[\u0400-\u04FF\u0590-\u05FF\u0600-\u06FF\u0E00-\u0E7F\uAC00-\uD7AF\u3040-\u30FF]/;
+
+  let checked = 0;
+  let bad = 0;
+  const examples: string[] = [];
+
+  for (const [code, script] of Object.entries(SCRIPT)) {
+    const spec = COUNTRY_BY_CODE[code];
+    const data = getCountryData(code);
+    if (!spec || !data) continue;
+    const name = getNamePool(code);
+
+    for (let i = 0; i < 20; i++) {
+      const id = generateIdentity(spec, { name, countryData: data }, { country: code, seed: randomSeed(), lang: "zh" });
+      checked++;
+      const full = id.map.fullName ?? "";
+      // The name must contain the country's script. It must not contain Latin
+      // letters, nor another non-Latin script.
+      if (!script.test(full)) {
+        bad++;
+        if (examples.length < 6) examples.push(`${code}: ${JSON.stringify(full)} has no local script`);
+      } else if (/[A-Za-z]/.test(full)) {
+        bad++;
+        if (examples.length < 6) examples.push(`${code}: ${JSON.stringify(full)} contains Latin`);
+      }
+    }
+  }
+  check(bad === 0, `${bad}/${checked} names are not written purely in the country's script`);
+  console.log(`  ${checked - bad}/${checked} names are written purely in the country's script`);
+  for (const e of examples) console.log(`    ${e}`);
+}
+
 console.log(`\n${failures === 0 ? "PASS" : "FAIL"} — ${checks} checks, ${failures} failures`);
 process.exit(failures === 0 ? 0 : 1);

@@ -15,7 +15,8 @@
     "links": "node scripts/check-links.mjs",
     "budget": "node scripts/check-budget.mjs",
     "hygiene": "node scripts/check-repo.mjs",
-    "verify": "npm run hygiene && npm run check && npm run test && npm run build && npm run links && npm run budget"
+    "verify": "npm run hygiene && npm run check && npm run test && npm run build && npm run links && npm run budget",
+    "audit": "tsx scripts/audit-all.ts"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.4",

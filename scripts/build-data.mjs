@@ -175,6 +175,10 @@ const HK_MO_NAMES = {
   "Nossa Senhora do Carmo": "嘉模堂區",
   "Cotai": "路氹城",
   "Sao Francisco Xavier": "聖方濟各堂區",
+  // These three carry no zh alias in GeoNames at all.
+  "Yuen Long": "元朗區",
+  "Tsuen Wan": "荃灣區",
+  "Tai Po": "大埔區",
 };
 
 function buildNameL10n(loc, ascii) {

@@ -549,8 +549,21 @@ export function generateIdentity(
   const suffixFirst = spec.address.streets ? false : Boolean(style?.suffixFirst);
   const attaches = Boolean(spec.address.streets) || Boolean(style?.attaches);
 
+  /*
+   * Word order and spacing are independent properties:
+   *
+   *   suffixFirst  "Rue Victor Hugo" (French) vs "Main Street" (English).
+   *   attaches     Whether the two are joined with no space. German and the
+   *                Nordic languages compound with the type last (Hauptstraße);
+   *                Thai puts the type first and also attaches (ถนนพหลโยธิน).
+   *
+   * Both flags were previously combined in one branch, so Thai — type first and
+   * attached — came out as "ถนน พหลโยธิน" with a stray space.
+   */
   const baseStreet = suffixFirst
-    ? `${roadType} ${streetStem}`
+    ? attaches
+      ? `${roadType}${streetStem}`
+      : `${roadType} ${streetStem}`
     : attaches
       ? `${streetStem}${roadType}`
       : `${streetStem} ${roadType}`;
@@ -786,7 +799,11 @@ export function generateIdentity(
   const fields: IdentityField[] = [
     // identity
     { key: "firstName", group: "identity", label: l10n("名", "First Name", "名", "이름"), value: firstName },
-    { key: "middleName", group: "identity", label: l10n("中间名", "Middle Name", "ミドルネーム", "중간 이름"), value: middleName || "—" },
+    // Emitted only when the country uses a middle name; a dash placeholder
+    // reads as a value that failed to generate.
+    ...(middleName
+      ? [{ key: "middleName", group: "identity" as GroupKey, label: l10n("中间名", "Middle Name", "ミドルネーム", "중간 이름"), value: middleName }]
+      : []),
     { key: "lastName", group: "identity", label: l10n("姓", "Last Name", "姓", "성"), value: lastName },
     { key: "fullName", group: "identity", label: l10n("全名", "Full Name", "氏名", "전체 이름"), value: fullName },
     { key: "gender", group: "identity", label: l10n("性别", "Gender", "性別", "성별"), value: lv(genderLabel(gender)) },

@@ -73,7 +73,7 @@ const LOCALE_MAP = {
   SG: ["en", "zh_CN", "en_IN"],
   TH: ["th"],
   VN: ["vi"],
-  AE: ["ar", "en"],
+  AE: ["ar"],
   SA: ["ar"],
   IL: ["he"],
   TR: ["tr"],
@@ -88,19 +88,45 @@ const LIMITS = { first: 120, last: 120, middle: 40, prefix: 8, suffix: 8, job: 4
 /** Draws attempted per pool before de-duplication. */
 const DRAWS = { first: 900, last: 900, middle: 300, prefix: 80, suffix: 80, job: 300 };
 
+/**
+ * Script each country's names must be written in.
+ *
+ * faker resolves a locale chain by falling back to `en` whenever the primary
+ * locale lacks a field. For Arabic that injected Latin names, producing records
+ * like "Jeromy العواني" — a Latin given name on an Arabic surname. Filtering by
+ * script after collection removes the fallback contamination for every country
+ * at once rather than by tinkering with individual chains.
+ *
+ * `null` means Latin script is acceptable (the default).
+ */
+const SCRIPT_FOR = {
+  CN: /[\u4E00-\u9FFF]/, TW: /[\u4E00-\u9FFF]/, HK: /[\u4E00-\u9FFF]/, MO: /[\u4E00-\u9FFF]/,
+  JP: /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/,
+  KR: /[\uAC00-\uD7AF]/,
+  RU: /[\u0400-\u04FF]/,
+  SA: /[\u0600-\u06FF]/, AE: /[\u0600-\u06FF]/,
+  IL: /[\u0590-\u05FF]/,
+  TH: /[\u0E00-\u0E7F]/,
+  VN: /[\u0100-\u01FF\u1EA0-\u1EF9]/, // Vietnamese diacritics
+};
+
 /** Samples a faker method many times and returns unique non-empty strings. */
-function collect(faker, method, draws, limit) {
+function collect(faker, method, draws, limit, script) {
   const seen = new Set();
   for (let i = 0; i < draws && seen.size < limit * 3; i++) {
     try {
       const v = faker.person[method]();
-      if (typeof v === "string" && v.trim()) seen.add(v.trim());
+      if (typeof v !== "string" || !v.trim()) continue;
+      const name = v.trim();
+      // Reject anything not written in the country's script, which is how the
+      // English fallback leaks in.
+      if (script && !script.test(name)) continue;
+      seen.add(name);
     } catch {
       break; // locale cannot supply this field at all
     }
   }
-  const arr = [...seen];
-  return arr;
+  return [...seen];
 }
 
 /**
@@ -127,12 +153,13 @@ for (const [cc, chain] of Object.entries(LOCALE_MAP)) {
     const faker = allFakers[id];
     if (!faker) continue;
     const weight = i === 0 ? 1 : 0.35;
-    pools.first.push(...collect(faker, "firstName", Math.round(DRAWS.first * weight), LIMITS.first));
-    pools.last.push(...collect(faker, "lastName", Math.round(DRAWS.last * weight), LIMITS.last));
-    pools.middle.push(...collect(faker, "middleName", Math.round(DRAWS.middle * weight), LIMITS.middle));
-    pools.prefix.push(...collect(faker, "prefix", Math.round(DRAWS.prefix * weight), LIMITS.prefix));
-    pools.suffix.push(...collect(faker, "suffix", Math.round(DRAWS.suffix * weight), LIMITS.suffix));
-    pools.job.push(...collect(faker, "jobTitle", Math.round(DRAWS.job * weight), LIMITS.job));
+    const script = SCRIPT_FOR[cc];
+    pools.first.push(...collect(faker, "firstName", Math.round(DRAWS.first * weight), LIMITS.first, script));
+    pools.last.push(...collect(faker, "lastName", Math.round(DRAWS.last * weight), LIMITS.last, script));
+    pools.middle.push(...collect(faker, "middleName", Math.round(DRAWS.middle * weight), LIMITS.middle, script));
+    pools.prefix.push(...collect(faker, "prefix", Math.round(DRAWS.prefix * weight), LIMITS.prefix, script));
+    pools.suffix.push(...collect(faker, "suffix", Math.round(DRAWS.suffix * weight), LIMITS.suffix, script));
+    pools.job.push(...collect(faker, "jobTitle", Math.round(DRAWS.job * weight), LIMITS.job, null));
   }
 
   const entry = {};

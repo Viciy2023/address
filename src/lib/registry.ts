@@ -1440,7 +1440,7 @@ export const COUNTRIES: CountrySpec[] = [
     incomeBands: ["HK$15,000-HK$24,000", "HK$24,000-HK$38,000", "HK$38,000-HK$60,000", "HK$60,000-HK$95,000"],
     usesBloodType: true,
     usesEthnicity: false,
-    schools: ["The University of Hong Kong", "The Chinese University of Hong Kong", "Hong Kong University of Science and Technology"],
+    schools: ["香港大學", "香港中文大學", "香港科技大學", "香港理工大學", "香港城市大學", "香港浸會大學"],
     majors: [
       L("工商管理", "Business Administration", "経営学", "경영학"),
       L("金融學", "Finance", "ファイナンス", "금융학"),
@@ -1491,7 +1491,7 @@ export const COUNTRIES: CountrySpec[] = [
     incomeBands: ["MOP$12,000-MOP$19,000", "MOP$19,000-MOP$30,000", "MOP$30,000-MOP$48,000", "MOP$48,000-MOP$75,000"],
     usesBloodType: true,
     usesEthnicity: false,
-    schools: ["University of Macau", "Macao Polytechnic University", "Macau University of Science and Technology"],
+    schools: ["澳門大學", "澳門理工大學", "澳門科技大學", "澳門城市大學"],
     majors: [
       L("旅遊管理", "Tourism Management", "観光経営", "관광경영"),
       L("葡語研究", "Portuguese Studies", "ポルトガル語学", "포르투갈어학"),
