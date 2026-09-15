@@ -867,7 +867,7 @@ export const COUNTRIES: CountrySpec[] = [
     },
     id: {
       name: L("身份证号", "National ID Number", "身分証番号", "신분증 번호"),
-      format: "L#########",
+      format: "L########",
       hasRealChecksum: false,
     },
     ethnicities: [
@@ -916,8 +916,8 @@ export const COUNTRIES: CountrySpec[] = [
     },
     id: {
       name: L("社会保障号 (INSEE)", "Social Security Number", "社会保障番号", "사회보장번호"),
-      format: "## ## ## ### ###",
-      hasRealChecksum: false,
+      format: "# ## ## ## ### ### ##",
+      hasRealChecksum: true, // NIR control key = 97 - (13-digit number mod 97)
     },
     ethnicities: [
       L("法国裔", "French", "フランス系", "프랑스계"),
@@ -1513,7 +1513,7 @@ export const COUNTRIES: CountrySpec[] = [
     id: {
       name: L("澳門居民身份證號碼", "Macao Resident Identity Card Number", "マカオ身分証番号", "마카오 신분증 번호"),
       format: "#######(A)",
-      hasRealChecksum: true,
+      hasRealChecksum: false, // Macao BIR has NO published check-digit algorithm
     },
     ethnicities: [
       L("華裔", "Chinese", "中国系", "중국계"),
@@ -1617,7 +1617,7 @@ export const COUNTRIES: CountrySpec[] = [
       id: {
         name: L("居民登录号", "Resident Registration Number", "住民登録番号", "주민등록번호"),
       format: "######-#######",
-      hasRealChecksum: false,
+      hasRealChecksum: true, // RRN carries a mod-11 check digit (real IDs may still fail it)
     },
     ethnicities: [
       L("韩裔", "Korean", "韓国系", "한국계"),
@@ -1950,7 +1950,7 @@ export const COUNTRIES: CountrySpec[] = [
     id: {
       name: L("身份证号 (Emirates ID)", "Emirates ID", "エミレーツID", "에미리트 ID"),
       format: "784-####-#######-#",
-      hasRealChecksum: false,
+      hasRealChecksum: false, // Emirates ID Luhn is de-facto, NOT published by the ICP
     },
     ethnicities: [
       L("阿联酋籍", "Emirati", "アラブ首長国連邦系", "에미리트계"),
@@ -2187,8 +2187,8 @@ export const COUNTRIES: CountrySpec[] = [
     },
     id: {
       name: L("人口登记码 (CURP)", "Population Registry Code", "人口登録コード", "인구 등록 코드"),
-      format: "LLLL######LLLLL##",
-      hasRealChecksum: false,
+      format: "LLLL######LLLLLL##",
+      hasRealChecksum: true, // CURP's 18th character is a mod-10 check digit
     },
     ethnicities: [
       L("混血", "Mestizo", "メスティソ", "메스티소"),

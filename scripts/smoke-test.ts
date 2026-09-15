@@ -262,20 +262,28 @@ console.log("\n=== postal format validation ===");
 
 console.log("\n=== national ID format validation ===");
 {
+  /*
+   * Structural patterns per document. These describe the REAL format, and were
+   * updated with the check-digit fixes:
+   *   FR  NIR is 13 digits + a 2-digit key (the old pattern had 12 digits, no key)
+   *   HK  HKID may carry one OR two letters before the six digits
+   *   SA  the first digit is 1 for a citizen and 2 for a resident (Iqama)
+   *   DE  Personalausweis is a letter plus 8 digits, not 9
+   */
   const ID_PATTERNS: Record<string, RegExp> = {
     US: /^\d{3}-\d{2}-\d{4}$/,
     CA: /^\d{3}-\d{3}-\d{3}$/,
     GB: /^[A-Z]{2} \d{2} \d{2} \d{2} [A-D]$/,
     AU: /^\d{3} \d{3} \d{3}$/,
     DE: /^[A-Z]\d{8}$/,
-    FR: /^(\d{2} ){3}\d{3} \d{3}$/,
+    FR: /^\d{13}\d{2}$/,
     ES: /^\d{8}[A-Z]$/,
     PT: /^\d{9}$/,
     NL: /^\d{9}$/,
     SE: /^\d{6}-\d{4}$/,
     CN: /^\d{17}[\dX]$/,
     TW: /^[A-Z]\d{9}$/,
-    HK: /^[A-Z]\d{6}\(\d|A\)$/,
+    HK: /^[A-Z]{1,2}\d{6}\(\d|A\)$/,
     JP: /^\d{12}$/,
     KR: /^\d{6}-\d{7}$/,
     IN: /^[A-Z]{5}\d{4}[A-Z]$/,
@@ -285,7 +293,7 @@ console.log("\n=== national ID format validation ===");
     TH: /^\d-\d{4}-\d{5}-\d{2}-\d$/,
     VN: /^\d{12}$/,
     AE: /^784-\d{4}-\d{7}-\d$/,
-    SA: /^1\d{9}$/,
+    SA: /^[12]\d{9}$/,
     IL: /^\d{9}$/,
     TR: /^\d{11}$/,
     BR: /^\d{3}\.\d{3}\.\d{3}-\d{2}$/,
@@ -1654,6 +1662,82 @@ console.log("\n=== address conformance (all 34 countries) ===");
   }
   check(sharedBad === 0, `${sharedBad} addresses dropped a city that shares its division's name`);
   console.log("  a city sharing its division's name still appears in the address");
+}
+
+console.log("\n=== national ID check digits (spec-verified) ===");
+{
+  /*
+   * Two-phase check. The order is the point:
+   *
+   *   Phase A  validate the VERIFIER against published known-valid samples. If a
+   *            sample fails, this test's own implementation is wrong and phase B
+   *            would be meaningless.
+   *   Phase B  validate the GENERATOR against that verifier.
+   *
+   * The algorithms live in scripts/id-checksums.ts, written from the published
+   * specification rather than from the generator's code, so a mistake in the
+   * generator cannot validate itself. Each entry in ID_ALGORITHMS carries its
+   * source.
+   */
+  const { ID_ALGORITHMS, NO_PUBLISHED_CHECKSUM } = await import("./id-checksums.ts");
+
+  let verifierBad = 0;
+  for (const a of ID_ALGORITHMS) {
+    const okValid = a.valid.every((v) => a.fn(v));
+    const okInvalid = a.invalid.every((v) => !a.fn(v));
+    if (!okValid || !okInvalid) {
+      verifierBad++;
+      console.error(`  FAIL: ${a.code} ${a.label} verifier does not reproduce its published samples`);
+    }
+  }
+  check(verifierBad === 0, `${verifierBad} verifiers disagreed with their published samples`);
+  console.log(`  verifier self-check: ${ID_ALGORITHMS.length - verifierBad}/${ID_ALGORITHMS.length} algorithms reproduce their published samples`);
+
+  // Phase B: every generator's output must satisfy its country's algorithm.
+  const N = 50;
+  let genBad = 0;
+  let genTotal = 0;
+  for (const a of ID_ALGORITHMS) {
+    const spec = COUNTRY_BY_CODE[a.code];
+    const data = getCountryData(a.code);
+    if (!spec || !data) continue;
+    const name = getNamePool(a.code);
+    const worst: string[] = [];
+    for (let i = 0; i < N; i++) {
+      const id = generateIdentity(spec, { name, countryData: data }, { country: a.code, seed: 10_000 + i * 7919 });
+      genTotal++;
+      if (!a.fn(id.map.idNumber ?? "")) {
+        genBad++;
+        if (worst.length < 3) worst.push(id.map.idNumber ?? "(empty)");
+      }
+    }
+    if (worst.length) console.error(`  FAIL: ${a.code} ${a.label} emitted invalid values: ${worst.join(", ")}`);
+  }
+  check(genBad === 0, `${genBad}/${genTotal} generated national IDs failed their country's check digit`);
+  console.log(`  ${genTotal - genBad}/${genTotal} generated IDs pass their country's real check-digit algorithm`);
+
+  /*
+   * The registry's `hasRealChecksum` flag drives the UI's "format only" badge, so
+   * it must be truthful: true exactly when we implement a published algorithm,
+   * false when the scheme has none or the algorithm is unofficial.
+   */
+  let claimBad = 0;
+  const implemented = new Set(ID_ALGORITHMS.map((a) => a.code));
+  for (const cc of COUNTRY_CODES) {
+    const spec = COUNTRY_BY_CODE[cc];
+    const hasAlgorithm = implemented.has(cc);
+    if (spec.id.hasRealChecksum !== hasAlgorithm) {
+      claimBad++;
+      console.error(`  FAIL: ${cc} claims hasRealChecksum=${spec.id.hasRealChecksum} but ${hasAlgorithm ? "does" : "does not"} have an implemented published algorithm`);
+    }
+  }
+  check(claimBad === 0, `${claimBad} countries mis-state whether their ID has a real checksum`);
+  console.log(`  hasRealChecksum is accurate for all ${COUNTRY_CODES.length} countries`);
+
+  // Countries with no published algorithm must be documented, not silently wrong.
+  const undocumented = COUNTRY_CODES.filter((c) => !implemented.has(c) && !NO_PUBLISHED_CHECKSUM[c]);
+  check(undocumented.length === 0, `no reason recorded for: ${undocumented.join(" ")}`);
+  console.log(`  ${Object.keys(NO_PUBLISHED_CHECKSUM).length} schemes documented as having no published checksum`);
 }
 
 console.log(`\n${failures === 0 ? "PASS" : "FAIL"} — ${checks} checks, ${failures} failures`);

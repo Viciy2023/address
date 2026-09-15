@@ -99,16 +99,28 @@ function nino(rng: Rng): string {
   return `${p1}${p2} ${rng.digits(2)} ${rng.digits(2)} ${rng.digits(2)} ${suffix}`;
 }
 
-/** Australian TFN: 9 digits with a weighted modulus-11 check digit. */
+/**
+ * Australian TFN: 9 digits, mod-11 weighted check.
+ *
+ * Weights [1,4,3,7,5,8,6,9,10] over all nine digits must total ≡ 0 (mod 11).
+ * Since the last weight is 10 ≡ −1, the ninth digit is simply the first eight
+ * digits' weighted sum mod 11 — not 11 minus it, which is what this used to
+ * compute and which produced numbers no TFN validator accepts.
+ *
+ * A weighted sum that lands on 10 has no single-digit check value, so such
+ * prefixes are redrawn.
+ */
 function tfn(rng: Rng): string {
-  const base = rng.digits(8);
   const weights = [1, 4, 3, 7, 5, 8, 6, 9];
-  let sum = 0;
-  for (let i = 0; i < 8; i++) sum += Number(base[i]) * weights[i];
-  const check = (11 - (sum % 11)) % 11;
-  const checkDigit = check === 10 ? 0 : check;
-  const full = base + String(checkDigit);
-  return `${full.slice(0, 3)} ${full.slice(3, 6)} ${full.slice(6)}`;
+  for (;;) {
+    const base = rng.digits(8);
+    let sum = 0;
+    for (let i = 0; i < 8; i++) sum += Number(base[i]) * weights[i];
+    const check = sum % 11;
+    if (check >= 10) continue;
+    const full = base + String(check);
+    return `${full.slice(0, 3)} ${full.slice(3, 6)} ${full.slice(6)}`;
+  }
 }
 
 /** German ID: 9 alphanumeric characters (format only). */
@@ -116,23 +128,83 @@ function deId(rng: Rng): string {
   return rng.letter() + rng.digits(8);
 }
 
-/** French INSEE: 13 digits + 2-digit key (format only). */
-function frInsee(rng: Rng): string {
-  return `${rng.digits(2)} ${rng.digits(2)} ${rng.digits(2)} ${rng.digits(3)} ${rng.digits(3)}`;
+/**
+ * French NIR (INSEE): 13 digits + a 2-digit control key.
+ *
+ *   S YY MM DDEPT CCC OOO   +   KK
+ *   S     sex, 1 male / 2 female
+ *   YY    year of birth
+ *   MM    month of birth
+ *   DDEPT department of birth (2 digits)
+ *   CCC   commune of birth
+ *   OOO   order within the commune
+ *   KK    control key = 97 − (the 13-digit number mod 97)
+ *
+ * There is NO day-of-birth field: the 13 digits are sex + year + month +
+ * department + commune + order (1+2+2+2+3+3). The date and sex come from the
+ * record so the number agrees with the profile it belongs to. Corsica (2A/2B)
+ * is excluded because its letter substitution needs separate handling and the
+ * key formula here does not cover it.
+ */
+function frInsee(rng: Rng, ctx: IdContext): string {
+  const d = parts(ctx);
+  const sex = ctx.gender === "male" ? "1" : ctx.gender === "female" ? "2" : String(rng.int(1, 2));
+  const yy = d ? d.yy : String(rng.int(50, 99)).padStart(2, "0");
+  const mm = d ? d.mm : String(rng.int(1, 12)).padStart(2, "0");
+  const dept = String(rng.int(1, 95)).padStart(2, "0");
+  const commune = String(rng.int(1, 999)).padStart(3, "0");
+  const order = String(rng.int(1, 999)).padStart(3, "0");
+
+  const body = `${sex}${yy}${mm}${dept}${commune}${order}`; // 13 digits
+  const key = 97 - (Number(body) % 97);
+  return `${body}${String(key).padStart(2, "0")}`;
 }
 
-/** Italian Codice Fiscale: 6 letters, 2 digits, letter, 2 digits, letter, 3 digits, letter. */
-function itFiscal(rng: Rng): string {
+/**
+ * Italian Codice Fiscale: 16 characters, the last a mod-26 check letter.
+ *
+ * Layout: 3 consonants of the surname, 3 of the given name, 2-digit year,
+ * 1-letter month (ABCDEHLMPRST), 2-digit day, 4-character town code, and the
+ * check letter — 3+3+2+1+2+4+1 = 16. The day is +40 for women, which is why the
+ * day field is not simply 01-31.
+ *
+ * Over the first 15 characters, odd 1-based positions use the "dispari" table
+ * and even 1-based positions use the "pari" table; the sum mod 26 indexes A–Z.
+ * The previous version had no day field and drew the last letter at random, so
+ * it was both the wrong length and never passed validation.
+ */
+function itFiscal(rng: Rng, ctx: IdContext): string {
   const cons = "BCDFGHJKLMNPQRSTVWXYZ";
   const vowel = "AEIOU";
   const pickC = () => cons[rng.int(0, cons.length - 1)];
   const pickV = () => vowel[rng.int(0, vowel.length - 1)];
   const surname = pickC() + pickC() + pickC();
   const name = pickC() + pickV() + pickC();
-  const month = "ABCDEHLMPRST"[rng.int(0, 11)];
+
+  const d = parts(ctx);
+  const year = d ? d.yy : String(rng.int(0, 99)).padStart(2, "0");
+  const month = "ABCDEHLMPRST"[d ? Number(d.mm) - 1 : rng.int(0, 11)];
+  // Day is gender-shifted: +40 for women.
+  const dayNum = d ? Number(d.dd) : rng.int(1, 28);
+  const day = String(dayNum + (ctx.gender === "female" ? 40 : 0)).padStart(2, "0");
   const town = rng.letter() + rng.digits(3);
-  const check = rng.letter();
-  return `${surname}${name}${String(rng.int(0, 99)).padStart(2, "0")}${month}${town}${check}`;
+
+  const body = `${surname}${name}${year}${month}${day}${town}`;
+  return body + itCheckChar(body);
+}
+
+/** The odd/even value tables and mod-26 check letter for a 15-char CF body. */
+const CF_ODD: Record<string, number> = {
+  "0": 1, "1": 0, "2": 5, "3": 7, "4": 9, "5": 13, "6": 15, "7": 17, "8": 19, "9": 21,
+  A: 1, B: 0, C: 5, D: 7, E: 9, F: 13, G: 15, H: 17, I: 19, J: 21, K: 2, L: 4, M: 18,
+  N: 20, O: 11, P: 3, Q: 6, R: 8, S: 12, T: 14, U: 16, V: 10, W: 22, X: 25, Y: 24, Z: 23,
+};
+const CF_EVEN = (c: string) => (/\d/.test(c) ? Number(c) : c.charCodeAt(0) - 65);
+
+function itCheckChar(body: string): string {
+  let sum = 0;
+  for (let i = 0; i < 15; i++) sum += i % 2 === 0 ? CF_ODD[body[i]] ?? 0 : CF_EVEN(body[i]);
+  return String.fromCharCode(65 + (sum % 26));
 }
 
 /** Spanish DNI: 8 digits + control letter (mod-23 table). */
@@ -152,16 +224,28 @@ function ptNif(rng: Rng): string {
   return `${base}${check}`;
 }
 
-/** Dutch BSN: 9 digits passing the "11-test". */
+/**
+ * Dutch BSN: 9 digits passing the "11-test" (elfproef).
+ *
+ * Weights are [9,8,7,6,5,4,3,2,−1] and the total must be ≡ 0 (mod 11). Rather
+ * than draw nine digits and hope, the last digit is SOLVED for: with the first
+ * eight fixed, the ninth must equal their weighted sum mod 11.
+ *
+ * The previous version drew random digits and retried up to 40 times, then gave
+ * up and returned the random digits unchanged — so a small share of output
+ * (measured: 8 in 500) failed the elfproef outright. It also ignored that 10
+ * has no single-digit solution, which is why retries were needed at all.
+ */
 function nlBsn(rng: Rng): string {
-  for (let attempt = 0; attempt < 40; attempt++) {
-    const d = rng.digits(9).split("").map(Number);
+  for (;;) {
+    const base = rng.digits(8);
     let sum = 0;
-    for (let i = 0; i < 8; i++) sum += d[i] * (9 - i);
-    sum -= d[8];
-    if (sum % 11 === 0) return d.join("");
+    for (let i = 0; i < 8; i++) sum += Number(base[i]) * (9 - i);
+    const check = sum % 11;
+    // 10 is not a digit; redraw the prefix when it occurs.
+    if (check === 10) continue;
+    return base + String(check);
   }
-  return rng.digits(9);
 }
 
 /**
@@ -195,13 +279,45 @@ function sePersonnummer(rng: Rng, ctx: IdContext): string {
   return `${payload.slice(0, 6)}-${payload.slice(6)}${check}`;
 }
 
-/** Norwegian fødselsnummer: DDMMYY + 5 digits (format only). */
+/**
+ * Norwegian fødselsnummer: DDMMYY + 5 digits, of which the last two are mod-11
+ * check digits.
+ *
+ *   K1 (10th digit): weights [3,7,6,1,8,9,4,5,2] over the first nine.
+ *   K2 (11th digit): weights [5,4,3,2,7,6,5,4,3,2] over the first ten.
+ *
+ * For each, k = 11 − (sum mod 11); k of 11 becomes 0, and k of 10 has no valid
+ * digit so the serial is redrawn. The previous version emitted five random
+ * digits with no check at all, while the registry claimed hasRealChecksum.
+ */
 function noFnr(rng: Rng, ctx: IdContext): string {
   const d = parts(ctx);
   const day = d ? d.dd : String(rng.int(1, 28)).padStart(2, "0");
   const month = d ? d.mm : String(rng.int(1, 12)).padStart(2, "0");
-  const year = d ? d.yy : String(rng.int(50, 99));
-  return `${day}${month}${year}${rng.digits(5)}`;
+  const year = d ? d.yy : String(rng.int(50, 99)).padStart(2, "0");
+
+  const w1 = [3, 7, 6, 1, 8, 9, 4, 5, 2];
+  const w2 = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+
+  for (;;) {
+    const serial = rng.digits(3); // digits 7-9
+    const head = day + month + year + serial; // 9 digits
+
+    let s1 = 0;
+    for (let i = 0; i < 9; i++) s1 += Number(head[i]) * w1[i];
+    const k1 = 11 - (s1 % 11);
+    if (k1 === 10) continue;
+    const k1d = k1 === 11 ? 0 : k1;
+
+    const withK1 = head + k1d; // 10 digits
+    let s2 = 0;
+    for (let i = 0; i < 10; i++) s2 += Number(withK1[i]) * w2[i];
+    const k2 = 11 - (s2 % 11);
+    if (k2 === 10) continue;
+    const k2d = k2 === 11 ? 0 : k2;
+
+    return `${head}${k1d}${k2d}`;
+  }
 }
 
 /**
@@ -230,10 +346,20 @@ function plPesel(rng: Rng, ctx: IdContext): string {
   return payload + check;
 }
 
-/** Russian SNILS: 9 digits + 2-digit check (format only). */
+/**
+ * Russian SNILS: 9 digits, then a 2-digit check number.
+ *
+ * Weights 9,8,…,1 over the nine digits: check = (Σ dᵢ·(9−i)) mod 101, with 100
+ * written as 00. The previous version appended two random digits.
+ */
 function ruSnils(rng: Rng): string {
   const base = rng.digits(9);
-  return `${base.slice(0, 3)}-${base.slice(3, 6)}-${base.slice(6)} ${rng.digits(2)}`;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += Number(base[i]) * (9 - i);
+  let check = sum % 101;
+  if (check === 100) check = 0;
+  const padded = String(check).padStart(2, "0");
+  return `${base.slice(0, 3)}-${base.slice(3, 6)}-${base.slice(6)} ${padded}`;
 }
 
 /**
@@ -289,20 +415,43 @@ function twId(rng: Rng): string {
   return `${letter}${digitStr}${check}`;
 }
 
-/** Hong Kong ID: 1-2 letters + 6 digits + check digit in parentheses. */
+/**
+ * Hong Kong ID: 1-2 letters + 6 digits + a check digit in parentheses.
+ *
+ * The check is mod 11 over eight weighted positions. The character values are
+ * the crux: a letter is worth its alphabet position plus 9 (A=10 … Z=35), and a
+ * *single-letter* ID is left-padded with a space worth 36. The previous version
+ * used A=1 and ignored the pad, so every check digit it printed was rejected.
+ *
+ * Weights are 9,8,7,6,5,4,3,2 and the check is (11 − sum mod 11) mod 11, with
+ * 10 written as "A".
+ */
 function hkId(rng: Rng): string {
   const letter = L[rng.int(0, 25)];
+  const letter2 = rng.chance(0.5) ? L[rng.int(0, 25)] : "";
   const digits = rng.digits(6);
-  // Weighted sum with A=10; weights 9,8,7,6,5,4,3,2
-  let sum = 36 * 9 + (letter.charCodeAt(0) - 64) * 8;
-  const weights = [7, 6, 5, 4, 3, 2];
-  for (let i = 0; i < 6; i++) sum += Number(digits[i]) * weights[i];
-  const r = sum % 11;
-  const check = r === 0 ? 0 : 11 - r;
-  return `${letter}${digits}(${check === 10 ? "A" : check})`;
+
+  const chars = letter2 ? [letter, letter2, ...digits] : [" ", letter, ...digits];
+  const weights = [9, 8, 7, 6, 5, 4, 3, 2];
+  let sum = 0;
+  for (let i = 0; i < 8; i++) {
+    const ch = chars[i];
+    const value = ch === " " ? 36 : Number(ch);
+    sum += (Number.isNaN(value) ? ch.charCodeAt(0) - 55 : value) * weights[i];
+  }
+  const check = (11 - (sum % 11)) % 11;
+  return `${letter}${letter2}${digits}(${check === 10 ? "A" : check})`;
 }
 
-/** Macao ID: 7 digits + check in parentheses (format only). */
+/**
+ * Macao Resident Identity Card: 7 digits with an eighth in parentheses.
+ *
+ * There is NO published check-digit algorithm for the Macao BIR. The trailing
+ * parenthesised digit is presentation, not a documented checksum, so this emits
+ * a plausible digit and the registry marks the value format-only
+ * (`hasRealChecksum: false`). Inventing a checksum here would be fabricating a
+ * rule the issuing authority has not stated.
+ */
 function moId(rng: Rng): string {
   return `${rng.digits(7)}(${rng.digits(1)})`;
 }
@@ -330,6 +479,15 @@ function jpMyNumber(rng: Rng): string {
  * The digit after the hyphen encodes both century and sex: 1/2 for the 1900s,
  * 3/4 for the 2000s, 5/6 for the 1800s, with the odd values male and the even
  * values female. The birth date and sex come from the record.
+ *
+ * The 13th digit is a mod-11 check over the first twelve (weights
+ * [2,3,4,5,6,7,8,9,2,3,4,5], check = (11 − sum mod 11) mod 10). It was
+ * previously left random.
+ *
+ * Caveat worth stating: since October 2020 the last six digits of a real RRN are
+ * randomised, and a substantial minority of issued numbers fail this checksum.
+ * The check digit is therefore the format the scheme was designed around, not a
+ * guarantee that a number is a real person's.
  */
 function krRrn(rng: Rng, ctx: IdContext): string {
   const d = parts(ctx);
@@ -343,7 +501,13 @@ function krRrn(rng: Rng, ctx: IdContext): string {
   const centuryGender =
     fullYear >= 2000 ? (male ? "3" : "4") : fullYear >= 1900 ? (male ? "1" : "2") : male ? "9" : "0";
 
-  return `${yy}${mm}${dd}-${centuryGender}${rng.digits(6)}`;
+  const seq = rng.digits(5);
+  const body = `${yy}${mm}${dd}${centuryGender}${seq}`; // 12 digits
+  const weights = [2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5];
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += Number(body[i]) * weights[i];
+  const check = (11 - (sum % 11)) % 10;
+  return `${yy}${mm}${dd}-${centuryGender}${seq}${check}`;
 }
 
 /** Indian PAN: 5 letters + 4 digits + 1 letter. */
@@ -364,7 +528,17 @@ function myKad(rng: Rng): string {
   return `${yy}${mm}${dd}-${rng.digits(2)}-${rng.digits(4)}`;
 }
 
-/** Singapore NRIC: letter + 7 digits + checksum letter. */
+/**
+ * Singapore NRIC/FIN: prefix letter + 7 digits + check letter.
+ *
+ * Weights [2,7,6,5,4,3,2]; T and G add 4 to the sum. The check letter comes
+ * from one of two tables, chosen by prefix GROUP: S/T share "JZIHGFEDCBA" and
+ * F/G share "XWUTRQPNMLK".
+ *
+ * The previous version applied the T-only offset correctly but then indexed the
+ * S table for a T prefix while adding the offset, which shifted every T number's
+ * letter by four places (T9597817M instead of T9597817C).
+ */
 function sgNric(rng: Rng): string {
   const prefix = rng.pick(["S", "T"]);
   const digits = rng.digits(7);
@@ -372,7 +546,7 @@ function sgNric(rng: Rng): string {
   let sum = 0;
   for (let i = 0; i < 7; i++) sum += Number(digits[i]) * weights[i];
   if (prefix === "T") sum += 4;
-  const table = prefix === "S" ? "JZIHGFEDCBA" : "XWUTRQPNMLK";
+  const table = prefix === "S" || prefix === "T" ? "JZIHGFEDCBA" : "XWUTRQPNMLK";
   return `${prefix}${digits}${table[sum % 11]}`;
 }
 
@@ -393,26 +567,57 @@ function vnCitizen(rng: Rng): string {
 
 /** UAE Emirates ID: 784-YYYY-NNNNNNN-C. */
 /**
- * UAE Emirates ID: 784-YYYY-NNNNNNN-N. Field 2 is the year of birth, so it must
- * match the record's own birth date.
+ * UAE Emirates ID: 784-YYYY-NNNNNNN-C.
+ *
+ * Field 2 is the year of birth, so it must match the record's own birth date.
+ * The final digit is a Luhn check over the first 15 digits — the widely used
+ * public implementation. IMPORTANT: the UAE ICP has never published the official
+ * algorithm, and there are credible reports of genuine IDs failing Luhn, so this
+ * follows the de-facto rule rather than a confirmed specification. The registry
+ * is marked accordingly.
  */
 function aeEmiratesId(rng: Rng, ctx: IdContext): string {
   const d = parts(ctx);
   const year = d ? d.yyyy : String(rng.int(1960, 2005));
-  return `784-${year}-${rng.digits(7)}-${rng.digits(1)}`;
-}
-
-/** Saudi national ID: 10 digits starting with 1 (format only). */
-function saNationalId(rng: Rng): string {
-  return "1" + rng.digits(9);
-}
-
-/** Israeli ID: 9 digits with a Luhn-style check digit. */
-function ilId(rng: Rng): string {
-  const base = rng.digits(8);
+  /*
+   * The number is 15 digits: 784 (3) + year (4) + 7 sequential + check (1).
+   * The body before the check is therefore 14 digits, not 15 — reading a 15th
+   * gave an undefined character and produced "...-NaN".
+   *
+   * Luhn runs over the full 15; the rightmost body digit (index 13) doubles
+   * first, so the check is the complement of the doubled sum of the body at
+   * odd distance from the right.
+   */
+  const body = `784${year}${rng.digits(7)}`; // 14 digits
   let sum = 0;
-  for (let i = 0; i < 8; i++) {
-    let v = Number(base[i]);
+  for (let i = 0; i < body.length; i++) {
+    let v = Number(body[i]);
+    // Positions at odd distance from the right (of the 15-digit whole) double.
+    const fromRight = 14 - i; // distance from the check digit, 1..14
+    if (fromRight % 2 === 1) {
+      v *= 2;
+      if (v > 9) v -= 9;
+    }
+    sum += v;
+  }
+  const check = (10 - (sum % 10)) % 10;
+  return `784-${year}-${body.slice(7)}-${check}`;
+}
+
+/**
+ * Saudi national ID / Iqama: 10 digits with a Luhn check digit.
+ *
+ * The first digit is 1 for a citizen and 2 for a resident. Luhn doubles the
+ * digits at 0-based even indices (every second from the right); the tenth digit
+ * is solved so the total is ≡ 0 (mod 10). Previously the first digit was correct
+ * but the check digit was random.
+ */
+function saNationalId(rng: Rng): string {
+  const first = rng.chance(0.8) ? "1" : "2";
+  const body = first + rng.digits(8); // 9 digits
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    let v = Number(body[i]);
     if (i % 2 === 0) {
       v *= 2;
       if (v > 9) v -= 9;
@@ -420,18 +625,56 @@ function ilId(rng: Rng): string {
     sum += v;
   }
   const check = (10 - (sum % 10)) % 10;
+  return body + check;
+}
+
+/**
+ * Israeli ID: 9 digits with a Luhn check digit.
+ *
+ * The doubling starts on the SECOND digit (0-based index 1), i.e. every second
+ * digit counting from the right of the nine. The previous version doubled the
+ * even indices instead, which is Luhn mis-aligned by one: it validated against
+ * neither the published samples (123456782, 000000018, 053605416) nor any
+ * Israeli validator.
+ */
+function ilId(rng: Rng): string {
+  const base = rng.digits(8);
+  let sum = 0;
+  for (let i = 0; i < 8; i++) {
+    let v = Number(base[i]);
+    if (i % 2 === 1) {
+      v *= 2;
+      if (v > 9) v -= 9;
+    }
+    sum += v;
+  }
+  // The ninth digit's weight is 1 in this alignment, so it carries the
+  // complement of the running total.
+  const check = (10 - (sum % 10)) % 10;
   return base + check;
 }
 
-/** Turkish T.C. Kimlik: 11 digits with two check digits. */
+/**
+ * Turkish T.C. Kimlik No: 11 digits with two check digits.
+ *
+ *   D10 = ((d1+d3+d5+d7+d9)·7 − (d2+d4+d6+d8)) mod 10
+ *   D11 = (d1+…+d10) mod 10
+ *
+ * The first formula goes negative whenever the even-position sum outweighs the
+ * odd one, and JavaScript's % keeps the sign (−233 % 10 === −3). The old code
+ * used that raw value, so roughly half the numbers carried a negative check
+ * digit and failed validation. The result is normalised into 0..9 here.
+ */
 function trKimlik(rng: Rng): string {
-  const d = rng.int(1, 9);
-  const rest = rng.digits(8).split("").map(Number);
-  const oddSum = d + rest[0] + rest[2] + rest[4] + rest[6];
-  const evenSum = rest[1] + rest[3] + rest[5] + rest[7];
-  const tenth = (oddSum * 7 - evenSum) % 10;
-  const t = ((oddSum + evenSum + tenth) % 10);
-  return `${d}${rest.join("")}${tenth}${t}`;
+  const first = rng.int(1, 9); // a leading 0 is not issued
+  const rest = rng.digits(8).split("").map(Number); // d2..d9
+  // d1 + d3 + d5 + d7 + d9 — odd POSITIONS, which are rest[1], rest[3], ...
+  const oddSum = first + rest[1] + rest[3] + rest[5] + rest[7];
+  // d2 + d4 + d6 + d8
+  const evenSum = rest[0] + rest[2] + rest[4] + rest[6];
+  const tenth = (((oddSum * 7 - evenSum) % 10) + 10) % 10;
+  const eleventh = (oddSum + evenSum + tenth) % 10;
+  return `${first}${rest.join("")}${tenth}${eleventh}`;
 }
 
 /** Brazilian CPF: 11 digits with two check digits. */
@@ -469,16 +712,24 @@ function mxCurp(rng: Rng, ctx: IdContext): string {
   const sex = ctx.gender === "male" ? "H" : ctx.gender === "female" ? "M" : rng.pick(["H", "M"]);
 
   const homoclave = rng.digit();
-  const check = rng.digit();
-  return (
+  const body =
     c() + v() + c() + c() +
     yy + mm + dd +
     sex +
     rng.pick(states) +
     c() + c() + c() +
-    homoclave +
-    check
-  );
+    homoclave;
+  // The 18th character is a mod-10 check digit over the dictionary
+  // "0123456789ABCDEFGHIJKLMNÑOPQRSTUVWXYZ" (Ñ = 24), weights 18..2.
+  return body + curpCheck(body);
+}
+
+/** Check digit for a 17-character CURP body. */
+function curpCheck(body17: string): string {
+  const DICT = "0123456789ABCDEFGHIJKLMNÑOPQRSTUVWXYZ";
+  let sum = 0;
+  for (let i = 0; i < 17; i++) sum += DICT.indexOf(body17[i]) * (18 - i);
+  return String((10 - (sum % 10)) % 10);
 }
 
 /** South African ID: YYMMDD + 4 digits + C + A + Z (Luhn check). */
@@ -504,6 +755,46 @@ function zaId(rng: Rng, ctx: IdContext): string {
   return `${withCheck.slice(0, 6)} ${withCheck.slice(6, 10)} ${withCheck.slice(10)}`;
 }
 
+/**
+ * New Zealand IRD number: 8 or 9 digits with a mod-11 check digit.
+ *
+ * Weights [3,2,7,6,5,4,3,2] over the base (padded to 8 digits), check =
+ * 11 − (sum mod 11) with 0 when the remainder is 0. If that yields 10 the
+ * secondary weights [7,4,3,2,5,2,7,6] are tried, and a second 10 means the base
+ * is unsuitable and is redrawn.
+ *
+ * Inland Revenue publishes this; the registry labels the document "IRD Number",
+ * so the checksum applies (unlike a New Zealand national ID, which does not
+ * exist). The number is printed as NNN-NNN-NNN.
+ */
+function nzIrd(rng: Rng): string {
+  const w1 = [3, 2, 7, 6, 5, 4, 3, 2];
+  const w2 = [7, 4, 3, 2, 5, 2, 7, 6];
+
+  for (;;) {
+    // Base is 7 or 8 digits; padded to 8 for the weighted sum.
+    const baseLen = rng.chance(0.5) ? 8 : 7;
+    const base = rng.digits(baseLen).padStart(8, "0");
+    let sum = 0;
+    for (let i = 0; i < 8; i++) sum += Number(base[i]) * w1[i];
+    let check = 11 - (sum % 11);
+    if (check === 11) check = 0;
+
+    if (check === 10) {
+      let sum2 = 0;
+      for (let i = 0; i < 8; i++) sum2 += Number(base[i]) * w2[i];
+      check = 11 - (sum2 % 11);
+      if (check === 11) check = 0;
+      if (check === 10) continue;
+    }
+
+    // 8-digit numbers present as NNN-NNN-NNN; a 7-digit base drops a leading 0.
+    const full = (baseLen === 7 ? base.slice(1) : base) + String(check);
+    const padded = full.padStart(9, "0");
+    return `${padded.slice(0, 3)}-${padded.slice(3, 6)}-${padded.slice(6)}`;
+  }
+}
+
 /** Dispatches on ISO country code. Unknown codes fall back to a numeric ID. */
 export function makeNationalId(code: string, rng: Rng, ctx: IdContext = {}): string {
   switch (code) {
@@ -511,10 +802,10 @@ export function makeNationalId(code: string, rng: Rng, ctx: IdContext = {}): str
     case "CA": return sin(rng);
     case "GB": return nino(rng);
     case "AU": return tfn(rng);
-    case "NZ": return `${rng.digits(3)}-${rng.digits(3)}-${rng.digits(3)}`;
+    case "NZ": return nzIrd(rng);
     case "DE": return deId(rng);
-    case "FR": return frInsee(rng);
-    case "IT": return itFiscal(rng);
+    case "FR": return frInsee(rng, ctx);
+    case "IT": return itFiscal(rng, ctx);
     case "ES": return esDni(rng);
     case "PT": return ptNif(rng);
     case "NL": return nlBsn(rng);
