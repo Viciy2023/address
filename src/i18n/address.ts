@@ -53,6 +53,14 @@ export interface AddressStrings {
   formatPhone: string;
   formatIntl: string;
   formatLocal: string;
+  formatNumberPos: string;
+  formatNumberBefore: string;
+  formatNumberAfter: string;
+  formatNumberAppended: string;
+  formatDivisionLine: string;
+  formatDivisionYes: string;
+  formatDivisionNo: string;
+  formatLevels: string;
   postalNone: string;
   /** Appended after a mask, e.g. "（# 为数字，A 为字母）". */
   maskLegend: string;
@@ -104,6 +112,14 @@ export const ADDRESS: Record<SiteLang, AddressStrings> = {
     formatPhone: "电话号码",
     formatIntl: "国际格式",
     formatLocal: "本地格式",
+    formatNumberPos: "门牌号位置",
+    formatNumberBefore: "在街道名称之前，如 20 Prince Street",
+    formatNumberAfter: "在街道名称之后，如 Bahnhofstraße 12",
+    formatNumberAppended: "接在街道名称之后并加标记，如 中山路12号",
+    formatDivisionLine: "行政区行",
+    formatDivisionYes: "地址中包含行政区名称",
+    formatDivisionNo: "地址中不写行政区，仅由城市与邮编定位",
+    formatLevels: "地址层级",
     postalNone: "该国没有邮政编码体系，网站若强制要求，通常填写 0000 之类的占位数字。",
     maskLegend: "（# 代表数字，A 代表字母，… 为沿用真实数据的前缀）",
     exampleTitle: "示例",
@@ -153,6 +169,14 @@ export const ADDRESS: Record<SiteLang, AddressStrings> = {
     formatPhone: "電話號碼",
     formatIntl: "國際格式",
     formatLocal: "本地格式",
+    formatNumberPos: "門牌號位置",
+    formatNumberBefore: "在街道名稱之前，如 20 Prince Street",
+    formatNumberAfter: "在街道名稱之後，如 Bahnhofstraße 12",
+    formatNumberAppended: "接在街道名稱之後並加標記，如 中山路12號",
+    formatDivisionLine: "行政區行",
+    formatDivisionYes: "地址中包含行政區名稱",
+    formatDivisionNo: "地址中不寫行政區，僅由城市與郵遞區號定位",
+    formatLevels: "地址層級",
     postalNone: "該國沒有郵遞區號體系，網站若強制要求，通常填寫 0000 之類的佔位數字。",
     maskLegend: "（# 代表數字，A 代表字母，… 為沿用真實資料的前綴）",
     exampleTitle: "範例",
@@ -202,6 +226,14 @@ export const ADDRESS: Record<SiteLang, AddressStrings> = {
     formatPhone: "Phone number",
     formatIntl: "International",
     formatLocal: "Local",
+    formatNumberPos: "House number",
+    formatNumberBefore: "Before the street name, as in 20 Prince Street",
+    formatNumberAfter: "After the street name, as in Bahnhofstraße 12",
+    formatNumberAppended: "Appended to the street name with a marker, as in 中山路12号",
+    formatDivisionLine: "Division line",
+    formatDivisionYes: "The address names the division",
+    formatDivisionNo: "No division is written; the town and postcode locate it",
+    formatLevels: "Address levels",
     postalNone: "This country has no postal code system. If a site insists on one, a placeholder such as 0000 is normally used.",
     maskLegend: "(# is a digit, A a letter, … the prefix taken from real data)",
     exampleTitle: "Example",
@@ -251,6 +283,14 @@ export const ADDRESS: Record<SiteLang, AddressStrings> = {
     formatPhone: "電話番号",
     formatIntl: "国際表記",
     formatLocal: "国内表記",
+    formatNumberPos: "番地の位置",
+    formatNumberBefore: "通りの名の前（例: 20 Prince Street）",
+    formatNumberAfter: "通りの名の後（例: Bahnhofstraße 12）",
+    formatNumberAppended: "通りの名の後に記号を付けて続ける（例: 中山路12号）",
+    formatDivisionLine: "行政区の行",
+    formatDivisionYes: "住所に行政区名を含める",
+    formatDivisionNo: "行政区は書かず、市区町村と郵便番号で特定する",
+    formatLevels: "住所の階層",
     postalNone: "この国には郵便番号の体系がありません。入力が必須の場合は 0000 などのプレースホルダーを用いるのが一般的です。",
     maskLegend: "（# は数字、A は英字、… は実データに由来する接頭部）",
     exampleTitle: "例",
@@ -300,6 +340,14 @@ export const ADDRESS: Record<SiteLang, AddressStrings> = {
     formatPhone: "전화번호",
     formatIntl: "국제 형식",
     formatLocal: "현지 형식",
+    formatNumberPos: "번지 위치",
+    formatNumberBefore: "도로명 앞 (예: 20 Prince Street)",
+    formatNumberAfter: "도로명 뒤 (예: Bahnhofstraße 12)",
+    formatNumberAppended: "도로명 뒤에 기호를 붙여 이어 씀 (예: 中山路12号)",
+    formatDivisionLine: "행정구역 줄",
+    formatDivisionYes: "주소에 행정구역 이름을 포함",
+    formatDivisionNo: "행정구역은 쓰지 않고 도시와 우편번호로 특정",
+    formatLevels: "주소 단계",
     postalNone: "이 국가에는 우편번호 체계가 없습니다. 입력이 필수라면 보통 0000 같은 자리 표시자를 사용합니다.",
     maskLegend: "(# 은 숫자, A 는 영문자, … 는 실제 데이터에서 가져온 접두부)",
     exampleTitle: "예시",

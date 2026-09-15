@@ -405,7 +405,18 @@ export interface StreetStyle {
   attaches?: boolean;
   /** House-number placement and marker for scripts that use one. */
   houseSuffix?: string;
-  /** House number follows the street name (CJK order). */
+  /**
+   * House number follows the street name: "Bahnhofstraße 12", "Via Roma 12".
+   *
+   * English, French and most of the Commonwealth put the number first ("20
+   * Prince Street"), but German, Dutch, the Nordic languages, the Slavic
+   * languages and the Romance languages of southern Europe put it after. The
+   * order is not cosmetic — "12 Via Roma" and "Via Roma 12" are different
+   * conventions and only one is right per country.
+   *
+   * The CJK countries carry their own street pools and always append the number
+   * (with a 号/番地 marker), which the generator handles separately.
+   */
   numberLast?: boolean;
 }
 
@@ -415,21 +426,21 @@ export const STREET_STYLES: Record<string, StreetStyle> = {
   GB: { streets: ["High", "Church", "Station", "Victoria", "Kings", "Queens", "Mill", "Park", "Manor", "Grange", "Windsor", "Albert"], suffixes: ["Street", "Road", "Lane", "Avenue", "Close", "Way", "Drive"] },
   AU: { streets: ["George", "Collins", "Bourke", "Elizabeth", "Wattle", "Banksia", "Acacia", "Harbour"], suffixes: ["Street", "Road", "Avenue", "Parade", "Crescent", "Drive"] },
   NZ: { streets: ["Queen", "Victoria", "Karangahape", "Cuba", "Lambton", "Riccarton", "Ponsonby"], suffixes: ["Street", "Road", "Avenue", "Terrace", "Place"] },
-  DE: { streets: ["Haupt", "Bahnhof", "Schul", "Garten", "Berg", "Wald", "Kirch", "Linden", "Goethe", "Schiller"], suffixes: ["straße", "weg", "platz", "allee", "gasse"], attaches: true },
+  DE: { streets: ["Haupt", "Bahnhof", "Schul", "Garten", "Berg", "Wald", "Kirch", "Linden", "Goethe", "Schiller"], suffixes: ["straße", "weg", "platz", "allee", "gasse"], attaches: true, numberLast: true },
   FR: { streets: ["Victor Hugo", "de la République", "de la Gare", "du Moulin", "des Écoles", "Jean Jaurès", "de Verdun", "Pasteur", "des Roses", "du Château"], suffixes: ["Rue", "Avenue", "Boulevard", "Place", "Impasse"], suffixFirst: true },
-  IT: { streets: ["Roma", "Garibaldi", "Dante", "Marconi", "Verdi", "Mazzini", "della Libertà", "del Corso"], suffixes: ["Via", "Viale", "Corso", "Piazza", "Vicolo"], suffixFirst: true },
-  ES: { streets: ["Mayor", "Real", "de la Constitución", "Cervantes", "de Alcalá", "de la Paz", "de Goya", "Colón"], suffixes: ["Calle", "Avenida", "Plaza", "Paseo", "Camino"], suffixFirst: true },
-  PT: { streets: ["da Liberdade", "de Santa Catarina", "Augusta", "do Comércio", "de Camões", "das Flores"], suffixes: ["Rua", "Avenida", "Praça", "Travessa", "Largo"], suffixFirst: true },
-  NL: { streets: ["Kerk", "Molen", "School", "Dorps", "Nieuwe", "Hoofd", "Markt", "Station"], suffixes: ["straat", "weg", "laan", "plein", "gracht"], attaches: true },
-  SE: { streets: ["Stor", "Kungs", "Drottning", "Sve", "Norra", "Södra", "Industri", "Skol"], suffixes: ["gatan", "vägen", "torget", "gränd"], attaches: true },
-  NO: { streets: ["Stor", "Kirke", "Skole", "Havne", "Nord", "Sør", "Industri", "Bjørne"], suffixes: ["gata", "veien", "plassen"], attaches: true },
-  PL: { streets: ["Polna", "Leśna", "Ogrodowa", "Krótka", "Słoneczna", "Lipowa", "Brzozowa", "Kościelna"], suffixes: ["ulica", "aleja", "plac"], suffixFirst: true },
-  RU: { streets: ["Ленина", "Советская", "Центральная", "Молодёжная", "Школьная", "Садовая", "Лесная", "Мира"], suffixes: ["улица", "проспект", "переулок"], suffixFirst: true },
-  TR: { streets: ["Atatürk", "Cumhuriyet", "İstiklal", "İnönü", "Bağdat", "Gazi", "Fevzi Çakmak"], suffixes: ["Caddesi", "Sokak", "Bulvarı"] },
-  BR: { streets: ["das Flores", "Sete de Setembro", "Getúlio Vargas", "Santos Dumont", "Rio Branco", "da Praia", "XV de Novembro"], suffixes: ["Rua", "Avenida", "Travessa", "Alameda"], suffixFirst: true },
-  MX: { streets: ["Juárez", "Hidalgo", "Zaragoza", "Reforma", "Constitución", "Insurgentes", "Morelos"], suffixes: ["Calle", "Avenida", "Calzada", "Privada"], suffixFirst: true },
+  IT: { streets: ["Roma", "Garibaldi", "Dante", "Marconi", "Verdi", "Mazzini", "della Libertà", "del Corso"], suffixes: ["Via", "Viale", "Corso", "Piazza", "Vicolo"], suffixFirst: true, numberLast: true },
+  ES: { streets: ["Mayor", "Real", "de la Constitución", "Cervantes", "de Alcalá", "de la Paz", "de Goya", "Colón"], suffixes: ["Calle", "Avenida", "Plaza", "Paseo", "Camino"], suffixFirst: true, numberLast: true },
+  PT: { streets: ["da Liberdade", "de Santa Catarina", "Augusta", "do Comércio", "de Camões", "das Flores"], suffixes: ["Rua", "Avenida", "Praça", "Travessa", "Largo"], suffixFirst: true, numberLast: true },
+  NL: { streets: ["Kerk", "Molen", "School", "Dorps", "Nieuwe", "Hoofd", "Markt", "Station"], suffixes: ["straat", "weg", "laan", "plein", "gracht"], attaches: true, numberLast: true },
+  SE: { streets: ["Stor", "Kungs", "Drottning", "Sve", "Norra", "Södra", "Industri", "Skol"], suffixes: ["gatan", "vägen", "torget", "gränd"], attaches: true, numberLast: true },
+  NO: { streets: ["Stor", "Kirke", "Skole", "Havne", "Nord", "Sør", "Industri", "Bjørne"], suffixes: ["gata", "veien", "plassen"], attaches: true, numberLast: true },
+  PL: { streets: ["Polna", "Leśna", "Ogrodowa", "Krótka", "Słoneczna", "Lipowa", "Brzozowa", "Kościelna"], suffixes: ["ulica", "aleja", "plac"], suffixFirst: true, numberLast: true },
+  RU: { streets: ["Ленина", "Советская", "Центральная", "Молодёжная", "Школьная", "Садовая", "Лесная", "Мира"], suffixes: ["улица", "проспект", "переулок"], suffixFirst: true, numberLast: true },
+  TR: { streets: ["Atatürk", "Cumhuriyet", "İstiklal", "İnönü", "Bağdat", "Gazi", "Fevzi Çakmak"], suffixes: ["Caddesi", "Sokak", "Bulvarı"], numberLast: true },
+  BR: { streets: ["das Flores", "Sete de Setembro", "Getúlio Vargas", "Santos Dumont", "Rio Branco", "da Praia", "XV de Novembro"], suffixes: ["Rua", "Avenida", "Travessa", "Alameda"], suffixFirst: true, numberLast: true },
+  MX: { streets: ["Juárez", "Hidalgo", "Zaragoza", "Reforma", "Constitución", "Insurgentes", "Morelos"], suffixes: ["Calle", "Avenida", "Calzada", "Privada"], suffixFirst: true, numberLast: true },
   ZA: { streets: ["Church", "Main", "Long", "Kloof", "Vine", "Loop", "Bree"], suffixes: ["Street", "Road", "Avenue", "Drive"] },
-  ID: { streets: ["Merdeka", "Sudirman", "Thamrin", "Gatot Subroto", "Diponegoro", "Ahmad Yani"], suffixes: ["Jalan"], suffixFirst: true },
+  ID: { streets: ["Merdeka", "Sudirman", "Thamrin", "Gatot Subroto", "Diponegoro", "Ahmad Yani"], suffixes: ["Jalan"], suffixFirst: true, numberLast: true },
   MY: { streets: ["Merdeka", "Ampang", "Bukit Bintang", "Tun Razak", "Sultan Ismail"], suffixes: ["Jalan"], suffixFirst: true },
   SG: { streets: ["Orchard", "Serangoon", "Bukit Timah", "Tanjong Pagar", "River Valley"], suffixes: ["Road", "Street", "Avenue", "Lane"] },
   TH: { streets: ["สุขุมวิท", "พหลโยธิน", "รัชดาภิเษก", "เพชรบุรี", "สีลม", "อโศก", "พระราม"], suffixes: ["ถนน", "ซอย"], suffixFirst: true, attaches: true },
@@ -1489,7 +1500,13 @@ export const COUNTRIES: CountrySpec[] = [
     address: {
       template: ["{street}", "{state}", "{city}", "{country}"],
       adminLabel: L("堂區", "Parish", "堂区", "교구"),
-      streets: ["新马路", "殷皇子大馬路", "南灣大馬路", "荷蘭園大馬路", "巴波沙大馬路"],
+      /*
+       * Stems only — the road type is appended from `streetSuffixes`. The pool
+       * previously held whole names ("南灣大馬路"), so appending a suffix produced
+       * "南灣大馬路大馬路". Each stem below combines correctly with every suffix
+       * (南灣 + 大馬路, 水坑尾 + 街).
+       */
+      streets: ["南灣", "荷蘭園", "巴波沙", "殷皇子", "水坑尾", "東望洋", "白馬行", "高士德"],
       streetSuffixes: ["大馬路", "街", "巷"],
       houseSuffix: "號",
     },
@@ -1593,7 +1610,7 @@ export const COUNTRIES: CountrySpec[] = [
         template: ["{state}{city}{street}", "{postal}", "{country}"],
         adminLabel: L("道 / 广域市", "Province", "道 / 広域市", "도 / 광역시"),
         // Korean roads are named "…로" / "…길".
-        streets: ["테헤란", "강남대", "종로", "세종대", "을지", "충장", "중앙", "한강", "올림픽", "반포"],
+        streets: ["테헤란", "강남대", "종", "세종대", "을지", "충장", "중앙", "한강", "올림픽", "반포"],
         streetSuffixes: ["로", "길"],
         houseSuffix: "번지",
       },

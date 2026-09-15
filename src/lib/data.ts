@@ -31,6 +31,17 @@ export interface CityEntry {
   pop: number;
   /** IANA time zone. */
   tz: string;
+  /**
+   * Real postal codes recorded for this exact city, when the dump lists them.
+   *
+   * Preferred over the division's set at generation time: a division can span
+   * many postcode regions (the UK has four divisions, so "England" covers the
+   * whole country), and drawing from the division produced a code belonging to
+   * another town. Absent when the dump has nothing for this city — note "p",
+   * not "postal", because this array is repeated on every city and the short
+   * key keeps the bundled JSON small.
+   */
+  p?: string[];
 }
 
 export interface DivisionEntry {

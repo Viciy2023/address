@@ -287,7 +287,12 @@ function buildNameL10n(loc, ascii) {
 
   const out = {};
   for (const [lang, value] of Object.entries(candidates)) {
-    if (value && value !== ascii) out[lang] = value;
+    // Some GeoNames aliases bundle alternatives with a literal " or "
+    // (Taiwan's province is stored as "臺灣省 or 台灣省"). That is a data-entry
+    // artefact, not a name, and it ends up printed on the address. Keep the
+    // first alternative.
+    const cleaned = value ? value.replace(/\s+or\s+.*$/i, "").trim() : value;
+    if (cleaned && cleaned !== ascii) out[lang] = cleaned;
   }
 
   /*
@@ -471,15 +476,26 @@ function loadAlternateNames() {
 
 /**
  * Reads a country's postal dump and returns two indexes:
- *   byName     --normalised admin-1 name  -> Set<postal>   (preferred)
- *   byCity     --normalised city name     -> Set<postal>   (fallback)
+ *   byName     --normalised admin-1 name  -> Set<postal>
+ *   byCity     --normalised city name     -> Set<postal>
+ *
+ * Both are used, in this order of trust:
+ *
+ *   byCity is preferred when the chosen city has postcodes of its own. A
+ *   division is often far larger than a postcode region — the UK has four
+ *   divisions, so "England" spans every postcode area in the country, and
+ *   taking a code from that set produced Brighton's "BN" beside Northampton.
+ *   The city is the finest grain the dump offers for the city line.
+ *
+ *   byName is the fallback, for cities the dump does not list individually
+ *   (small places, or dumps that only key on the division).
  *
  * The admin-1 name column is empty in several dumps (ID, ZA, AE), and the
  * admin-1 *code* column uses a scheme incompatible with cities5000. The city
  * index sidesteps both problems, because cities5000 already tells us which
  * division each city belongs to.
  *
- * Column layout: postal | city | admin1Name | admin1Code | ...
+ * Column layout: placeName | postal | city | admin1Name | admin1Code
  */
 function loadPostal(cc) {
   const cached = path.join(CACHE, `${cc}.postal.txt`);
@@ -539,6 +555,10 @@ function loadPostal(cc) {
  * Picks the postal examples for one division. Prefers a division-name match,
  * then a token-overlap match, then aggregates the postals of every city that
  * cities5000 assigns to the division.
+ *
+ * This division-level set is only a fallback now: the per-city postcodes stored
+ * on each city are used first at generation time, because a division can span
+ * many postcode regions (the UK's four divisions, for one).
  */
 function pickPostalExamples(postal, divisionName, cityNames) {
   if (!postal) return null;
@@ -568,6 +588,20 @@ function pickPostalExamples(postal, divisionName, cityNames) {
     if (hit) for (const v of hit) out.add(v);
   }
   return out.size ? [...out] : null;
+}
+
+/**
+ * The real postcodes recorded for one city, or null.
+ *
+ * Capped at 12: a handful of postcodes is enough to make the city's own code
+ * appear, and the cap keeps the bundled JSON small for dumps where a single
+ * city (a capital, typically) has thousands.
+ */
+function cityPostals(postal, cityName) {
+  if (!postal) return null;
+  const hit = postal.byCity.get(normalizeDivision(cityName));
+  if (!hit || !hit.size) return null;
+  return [...hit].slice(0, 12);
 }
 
 /** Format-correct placeholder used when a division has no recorded postal codes. */
@@ -678,6 +712,10 @@ for (const cc of CODES) {
       postal: examples,
       cities: chosen.map((c) => {
         const loc = cityLocalized.get(c.id);
+        // The city's own real postcodes, where the dump records them. The
+        // generator prefers these over the division set, which is what keeps a
+        // postcode inside the city it is printed beside.
+        const own = cityPostals(postal, c.name);
         return {
           n: c.name,
           // Localized city name, same reasoning as the division name: the CJK
@@ -685,6 +723,9 @@ for (const cc of CODES) {
           nL10n: loc ? buildNameL10n(loc, c.name) : null,
           pop: c.pop,
           tz: c.tz,
+          // Omitted entirely when the dump has nothing for this city, so the
+          // JSON stays small and the fallback path is unambiguous.
+          ...(own ? { p: own } : {}),
         };
       }),
     });

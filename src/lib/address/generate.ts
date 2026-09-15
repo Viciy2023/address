@@ -22,7 +22,7 @@ import {
   type GenerateDeps,
   type Identity,
 } from "../generator/index.js";
-import { COUNTRIES, COUNTRY_BY_CODE, type CountrySpec } from "../registry.js";
+import { COUNTRIES, COUNTRY_BY_CODE, STREET_STYLES, type CountrySpec } from "../registry.js";
 import { postalHint } from "../generator/postal.js";
 import type { SiteLang } from "../../config.js";
 
@@ -30,6 +30,12 @@ import type { SiteLang } from "../../config.js";
 export interface AddressField {
   key: string;
   value: string;
+}
+
+export interface AddressLine {
+  value: string;
+  /** The template line it came from, e.g. "{city}, {stateCode} {postal}". */
+  template: string;
 }
 
 export interface AddressRecord {
@@ -40,8 +46,14 @@ export interface AddressRecord {
   fields: AddressField[];
   /** Authoritative single-line address, as generated. */
   fullAddress: string;
-  /** The same address split into printed lines, for the example card. */
-  lines: string[];
+  /**
+   * The address on the country's own template, one entry per printed line.
+   *
+   * Taken from the generator rather than re-split from `fullAddress`: the
+   * country decides how many lines there are and what each carries, and
+   * re-splitting a flat string guesses at that.
+   */
+  lines: AddressLine[];
 }
 
 /**
@@ -69,12 +81,8 @@ function toRecord(id: Identity, spec: CountrySpec): AddressRecord {
     fullName: id.summary.fullName,
     fields,
     fullAddress,
-    /*
-     * Split the authoritative one-line address on the separator the generator
-     * joined it with, so the example card shows the same string laid out over
-     * several lines. This is presentation only — the value is never rewritten.
-     */
-    lines: fullAddress.split(/,\s*/).filter(Boolean),
+    // The country's own template lines, straight from the generator.
+    lines: id.addressLines.map((l) => ({ value: l.value, template: l.template })),
   };
 }
 
@@ -131,6 +139,9 @@ export function sortedCountries(lang: SiteLang): CountryOption[] {
 /* Format explainer                                                    */
 /* ------------------------------------------------------------------ */
 
+/** Where the house number sits relative to the street name. */
+export type NumberPosition = "before" | "after" | "appended";
+
 export interface AddressFormat {
   /** Localized name of the first-level division, e.g. "州" / "State". */
   adminLabel: string;
@@ -150,19 +161,41 @@ export interface AddressFormat {
   groups: number[];
   /** Trunk prefix that is dropped in the international form, when one exists. */
   trunkPrefix?: string;
+  /**
+   * House-number placement: before the name ("20 Prince Street"), after it
+   * ("Bahnhofstraße 12", "Via Roma 12"), or appended with a marker (中山路12号).
+   */
+  numberPosition: NumberPosition;
+  /**
+   * Whether the country writes a state/province line. The registry template is
+   * the source of truth: several countries (DE, NL, FR, GB) carry no division
+   * token at all, and saying otherwise would misdescribe their addresses.
+   */
+  usesDivision: boolean;
+  /** Number of lines the country's template produces. */
+  levels: number;
 }
 
 /** Describes a country's address and phone conventions from the registry. */
 export function addressFormat(spec: CountrySpec, lang: SiteLang): AddressFormat {
+  const template = spec.address.template;
+  const style = STREET_STYLES[spec.code];
+  const cjk = Boolean(spec.address.streets);
+
   return {
     adminLabel: spec.address.adminLabel[lang] ?? spec.address.adminLabel.en,
-    template: [...spec.address.template],
+    template: [...template],
     postalDisabled: spec.postalDisabled,
     postalMask: spec.postalDisabled ? "" : postalHint(spec.postalStyle),
     dialCode: spec.phone.code,
     nationalDigits: spec.phone.nationalDigits,
     groups: [...spec.phone.groups],
     trunkPrefix: spec.phone.trunkPrefix,
+    numberPosition: cjk ? "appended" : style?.numberLast ? "after" : "before",
+    // {state} or {stateCode} in the template, or a spec-owned street pool (CJK,
+    // where the division is glued onto the street line).
+    usesDivision: template.some((l) => /\{state(Code)?\}/.test(l)),
+    levels: template.length,
   };
 }
 

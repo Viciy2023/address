@@ -92,6 +92,12 @@ export interface Identity {
   groups: { key: GroupKey; fields: IdentityField[] }[];
   /** Flat map for copy/export. */
   map: Record<string, string>;
+  /**
+   * The address on the country's own template, one entry per printed line, each
+   * with the template line it was rendered from. `template` keeps the tokens
+   * (e.g. "{city}, {stateCode} {postal}") so a caller can label the line.
+   */
+  addressLines: { value: string; template: string }[];
   /** Headline values used by the summary card. */
   summary: {
     fullName: string;
@@ -469,7 +475,36 @@ export function generateIdentity(
     // A concatenated address omits the city rather than inserting ASCII.
     (concatenated ? "" : divisionName);
 
-  const postal = makePostal(division.postal, countryData.postalStyle, rng);
+  /*
+   * Where a *concatenated* template would print the same name twice, print it
+   * once.
+   *
+   * Korean metropolitan cities are their own province, and GeoNames records one
+   * as both 대구광역시 (the division) and 대구 (a city); the "{state}{city}{street}"
+   * template then produced "대구광역시대구광역시을지길…".
+   *
+   * This only applies where the parts are glued together with no separator. A
+   * separated address ("Madrid, 28001 Madrid") is not repetitive in the same
+   * way, and blanking the city there would leave the city field and the full
+   * address disagreeing — which is what the previous attempt did.
+   */
+  const cityIsDivision = concatenated && Boolean(city) && Boolean(cityName) && cityName === divisionName;
+
+  /** The city as printed inside the template, blank when already covered. */
+  const cityPart = cityIsDivision ? "" : cityName;
+
+  /*
+   * Postal code: the chosen city's own codes take precedence.
+   *
+   * A division is frequently much larger than a postcode region — the UK has
+   * four divisions, so "England"'s set spans Brighton, Manchester, Sheffield and
+   * everything else, and drawing from it printed Brighton's "BN" beside
+   * Northampton. The city's own codes are the finest grain the data carries, so
+   * they are used when present and the division set is the fallback for cities
+   * the dump does not list.
+   */
+  const postalSource = city?.p?.length ? city.p : division.postal;
+  const postal = makePostal(postalSource, countryData.postalStyle, rng);
 
   const gender: "male" | "female" =
     opts.gender === "male" || opts.gender === "female"
@@ -588,13 +623,23 @@ export function generateIdentity(
       : `${streetStem} ${roadType}`;
 
   /*
-   * Number placement follows the same logic. Latin addresses lead with the
-   * house number ("120 Oak St"); CJK addresses put it last with a marker
-   * (号 / 番地 / 번지).
+   * Number placement is three-way, not two-way.
+   *
+   *   CJK pools (spec.address.streets)  number last with a marker: 中山路12号.
+   *   numberLast (Germanic, Slavic, southern Romance)  after the name:
+   *                                    "Bahnhofstraße 12", "Via Roma 12".
+   *   everything else (English, French, Commonwealth)  before the name:
+   *                                    "120 Oak St", "12 rue de la Paix".
+   *
+   * The middle case was missing: every non-CJK country led with the number, so
+   * German read "12 Bahnhofstraße" and Spanish "12 Calle Mayor" — both wrong.
    */
+  const numberLast = !spec.address.streets && Boolean(style?.numberLast);
   const street = spec.address.streets
     ? `${baseStreet}${streetNumber}${spec.address.houseSuffix ?? ""}`
-    : `${streetNumber} ${baseStreet}`;
+    : numberLast
+      ? `${baseStreet} ${streetNumber}`
+      : `${streetNumber} ${baseStreet}`;
 
   /*
    * Phone numbers are built from the country's real mobile prefixes rather than
@@ -642,7 +687,7 @@ export function generateIdentity(
   const addressLines = spec.address.template.map((line) =>
     line
       .replace("{street}", street)
-      .replace("{city}", cityName)
+      .replace("{city}", cityPart)
       .replace("{stateCode}", stateAbbr)
       .replace("{state}", divisionName)
       .replace("{postal}", postal.value)
@@ -927,6 +972,15 @@ export function generateIdentity(
     fields,
     groups,
     map,
+    /*
+     * The address rendered on the country's own template, one entry per line,
+     * paired with the template line it came from. The address page uses this to
+     * show an example that mirrors how the country actually lays an address out,
+     * rather than re-splitting the flat string and guessing.
+     */
+    addressLines: addressLines
+      .map((value, i) => ({ value, template: spec.address.template[i] }))
+      .filter((l) => l.value.replace(/[\s,]/g, "").length > 0),
     summary: {
       fullName,
       avatarSeed: avatarSeed(fullName, opts.seed),

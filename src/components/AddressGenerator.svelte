@@ -132,6 +132,26 @@
   /** Digit count in the interface language, e.g. "10 位" / "10 digits". */
   $: digitLabel = { zh: `${format?.nationalDigits ?? 0} 位`, "zh-hant": `${format?.nationalDigits ?? 0} 位`, en: `${format?.nationalDigits ?? 0} digits`, ja: `${format?.nationalDigits ?? 0} 桁`, ko: `${format?.nationalDigits ?? 0}자리` }[lang];
 
+  /** House-number placement, phrased in the interface language. */
+  $: numberPosText =
+    format?.numberPosition === "after" ? m.formatNumberAfter
+      : format?.numberPosition === "appended" ? m.formatNumberAppended
+        : m.formatNumberBefore;
+
+  /**
+   * Names the elements a template line carries, e.g. "{city}, {stateCode}
+   * {postal}" -> "城市 · 行政区代码 · 邮政编码".
+   *
+   * This is what makes the example card describe the *country's* structure: the
+   * labels come from the template the address was actually rendered on, not
+   * from a fixed list of lines.
+   */
+  function templateRole(template: string): string {
+    const tokens = [...template.matchAll(/\{(\w+)\}/g)].map((mt) => TOKEN_LABEL[mt[1]]?.(lang) ?? mt[1]);
+    const unique = [...new Set(tokens)];
+    return unique.length ? unique.join(" · ") : m.street;
+  }
+
   onMount(() => { void run(); });
 </script>
 
@@ -265,6 +285,23 @@
           <dt>{m.formatTemplate}</dt>
           <dd>{templateDisplay.join(" → ")}</dd>
         </div>
+
+        <!-- The country's real structural conventions, each read from the
+             registry rather than written as prose, so this can never disagree
+             with what is generated. -->
+        <div class="spec-row">
+          <dt>{m.formatLevels}</dt>
+          <dd>{format.levels}</dd>
+        </div>
+        <div class="spec-row">
+          <dt>{m.formatNumberPos}</dt>
+          <dd>{numberPosText}</dd>
+        </div>
+        <div class="spec-row">
+          <dt>{m.formatDivisionLine}</dt>
+          <dd>{format.usesDivision ? m.formatDivisionYes : m.formatDivisionNo}</dd>
+        </div>
+
         <div class="spec-row">
           <dt>{m.formatPostal}</dt>
           <dd>
@@ -310,9 +347,16 @@
           Keyed by index, not by the line text: an address can legitimately
           repeat a line (in the UAE the city and the emirate are often both
           "Ras Al Khaimah"), and a value key would throw on the duplicate.
+
+          Each line is labelled with the elements it carries, taken from the
+          country's own template, so the example shows this country's structure
+          rather than an assumed one.
         -->
         {#each record.lines as line, i (i)}
-          <div class="env-line">{line}</div>
+          <div class="env-row">
+            <span class="env-line">{line.value}</span>
+            <span class="env-role faint">{templateRole(line.template)}</span>
+          </div>
         {/each}
       </div>
     </section>
@@ -566,15 +610,30 @@
   .envelope {
     font-family: var(--font-mono);
     font-size: 0.9375rem;
-    line-height: 1.9;
     padding: 1.25rem 1.5rem;
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
   }
 
-  .env-name { font-weight: 600; margin-bottom: 0.25rem; }
+  .env-name { font-weight: 600; margin-bottom: 0.5rem; }
+
+  /* Each printed line, with the elements it carries noted to its right. */
+  .env-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem 0.875rem;
+    padding-block: 0.1875rem;
+  }
+
   .env-line { color: var(--text-muted); }
+
+  .env-role {
+    font-family: var(--font-sans, Inter, sans-serif);
+    font-size: 0.6875rem;
+    letter-spacing: 0.02em;
+  }
 
   /* --------------------------------------------------------------- notes */
 

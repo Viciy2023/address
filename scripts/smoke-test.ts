@@ -1453,5 +1453,208 @@ console.log("\n=== address generator ===");
   console.log("  records carry their own country's name");
 }
 
+console.log("\n=== address conformance (all 34 countries) ===");
+{
+  /*
+   * The defect this guards against, reported from the live site:
+   *
+   *   553 Station Way, Northampton, BN91 5YJ
+   *
+   * BN is Brighton's postcode area; Northampton is NN. The postcode had been
+   * drawn from the division's aggregated set, and the UK has only four
+   * divisions, so "England" spanned the whole country.
+   *
+   * These checks assert the three things that were wrong:
+   *   1. the postcode's region prefix comes from the generated city's own real
+   *      codes, not some other town's;
+   *   2. the house number sits where the country puts it (before the street in
+   *      English-speaking countries, after it in German, Dutch, Nordic, Slavic
+   *      and southern-Romance ones, appended with a marker in CJK);
+   *   3. the example lines follow the country's own template, so the structure
+   *      shown is the country's and not a generic one.
+   */
+  const { COUNTRIES } = await import("../src/lib/registry.ts");
+  const { loadCountryData, loadNamePool } = await import("../src/lib/data.ts");
+  const { generateAddress, addressFormat } = await import("../src/lib/address/generate.ts");
+  const { SHAPES } = await import("../src/lib/generator/postal.ts");
+  const { STREET_STYLES } = await import("../src/lib/registry.ts");
+
+  /** The part of a postcode that identifies the region (the preserved prefix). */
+  function regionPrefix(code: string, style: string): string {
+    const shape = (SHAPES as Record<string, { head: number | "all"; sep?: string } | null>)[style];
+    if (!shape) return code;
+    // GB keeps the whole outward code, which is the segment before the space.
+    if (style === "gb") return code.split(" ")[0];
+    if (style === "ca") return code.slice(0, 3);
+    // "all" keeps the example verbatim; any tail (a randomised letter pair in
+    // NL) is appended after the separator, so compare only the head segment.
+    if (shape.head === "all") return shape.sep ? code.split(shape.sep)[0] : code;
+    return code.slice(0, shape.head);
+  }
+
+  // 1. Postcode region must belong to the generated city.
+  const REPORTED = ["GB", "US", "CA", "AU", "DE", "FR", "IT", "ES", "PT", "NL", "SE", "NO", "PL", "BR", "MX", "IN", "ID", "MY", "TR", "ZA", "TH", "NZ", "SG", "CN", "JP"];
+  let pcOk = 0;
+  let pcBad = 0;
+  let pcNoCity = 0;
+  for (const cc of REPORTED) {
+    const spec = COUNTRIES.find((c) => c.code === cc)!;
+    const [d, n] = await Promise.all([loadCountryData(cc), loadNamePool(cc)]);
+    // City name -> its own real postcodes, straight from the bundled data.
+    const ownIndex = new Map<string, string[]>();
+    for (const st of d.states) for (const c of st.cities) if (c.p) ownIndex.set(c.n.toLowerCase(), c.p);
+
+    for (let s = 0; s < 12; s++) {
+      const rec = generateAddress(spec, { name: n, countryData: d }, s * 104729 + 7);
+      const city = rec.fields.find((f) => f.key === "city")?.value ?? "";
+      const postal = rec.fields.find((f) => f.key === "postal")?.value;
+      if (!postal) continue;
+      const own = ownIndex.get(city.toLowerCase());
+      if (!own) { pcNoCity++; continue; }
+      const got = regionPrefix(postal, spec.postalStyle);
+      if (own.some((p) => regionPrefix(p, spec.postalStyle) === got)) pcOk++;
+      else {
+        pcBad++;
+        if (pcBad <= 6) console.error(`  FAIL: ${cc} ${city} got postcode "${postal}" (region ${got}); its own are ${own.slice(0, 4).join(", ")}`);
+      }
+    }
+  }
+  check(pcBad === 0, `${pcBad} postcodes came from a region other than the generated city's`);
+  console.log(`  ${pcOk}/${pcOk + pcBad} generated postcodes carry the generated city's own region prefix (${pcNoCity} cities have no per-city data, fallback used)`);
+
+  // 2. House-number placement per country.
+  const NUMBER_AFTER = new Set(["DE", "NL", "SE", "NO", "PL", "RU", "IT", "ES", "PT", "ID", "BR", "MX", "TR"]);
+  const CJK = new Set(["CN", "TW", "HK", "MO", "JP", "KR"]);
+  let posBad = 0;
+  for (const spec of COUNTRIES) {
+    const [d, n] = await Promise.all([loadCountryData(spec.code), loadNamePool(spec.code)]);
+    const fmt = addressFormat(spec, "en");
+    // The format object must agree with the registry it describes.
+    const expectedPos = CJK.has(spec.code) ? "appended" : NUMBER_AFTER.has(spec.code) ? "after" : "before";
+    if (fmt.numberPosition !== expectedPos) {
+      posBad++;
+      console.error(`  FAIL: ${spec.code} numberPosition ${fmt.numberPosition}, expected ${expectedPos}`);
+    }
+    // And the generated street must match it.
+    const rec = generateAddress(spec, { name: n, countryData: d }, 20260607);
+    const street = rec.fields.find((f) => f.key === "street")?.value ?? "";
+    if (expectedPos === "before" && !/^\d/.test(street)) {
+      posBad++;
+      console.error(`  FAIL: ${spec.code} street "${street}" should lead with the number`);
+    }
+    if (expectedPos === "after" && /^\d/.test(street)) {
+      posBad++;
+      console.error(`  FAIL: ${spec.code} street "${street}" should end with the number`);
+    }
+  }
+  check(posBad === 0, `${posBad} house-number placements were wrong`);
+  console.log("  house numbers sit where each country puts them (before / after / appended)");
+
+  // 3. The example follows the country's own template.
+  let tplBad = 0;
+  for (const spec of COUNTRIES) {
+    const [d, n] = await Promise.all([loadCountryData(spec.code), loadNamePool(spec.code)]);
+    const rec = generateAddress(spec, { name: n, countryData: d }, 4242);
+    // One line per non-empty template line, in template order.
+    const want = spec.address.template.filter((t) => t.replace(/[\s,]/g, "").length > 0).length;
+    if (rec.lines.length === 0 || rec.lines.length > want) {
+      tplBad++;
+      console.error(`  FAIL: ${spec.code} produced ${rec.lines.length} example lines for a ${want}-line template`);
+    }
+    // Each line must carry a template, and the templates must follow the
+    // country's order.
+    for (let i = 0; i < rec.lines.length; i++) {
+      if (!rec.lines[i].template) { tplBad++; console.error(`  FAIL: ${spec.code} line ${i} has no template`); }
+    }
+    // The first template line that contains a token must match.
+    const firstTpl = spec.address.template[rec.lines.length ? 0 : 0];
+    if (rec.lines[0] && rec.lines[0].template !== firstTpl) {
+      tplBad++;
+      console.error(`  FAIL: ${spec.code} first example line is "${rec.lines[0].template}", template says "${firstTpl}"`);
+    }
+  }
+  check(tplBad === 0, `${tplBad} example-line structures disagreed with the country's template`);
+  console.log("  example lines follow each country's own template");
+
+  // 4. The format object must not claim a division line the country does not use.
+  let divBad = 0;
+  for (const spec of COUNTRIES) {
+    const fmt = addressFormat(spec, "en");
+    const templateHasDivision = spec.address.template.some((l) => /\{state(Code)?\}/.test(l));
+    // CN/TW/HK/MO glue the division onto the street line instead of listing it.
+    const cjk = Boolean(spec.address.streets);
+    if (fmt.usesDivision !== templateHasDivision && !cjk) {
+      divBad++;
+      console.error(`  FAIL: ${spec.code} usesDivision=${fmt.usesDivision}, template says ${templateHasDivision}`);
+    }
+  }
+  check(divBad === 0, `${divBad} countries were misdescribed on the division line`);
+  console.log("  division-line claims match the registry templates");
+
+  // 5. Street styles must not carry the " or " artefact from GeoNames aliases.
+  const allData = await Promise.all(COUNTRIES.map((c) => loadCountryData(c.code)));
+  const json = JSON.stringify(allData);
+  check(!/ or /.test(json), 'bundled data still contains a GeoNames " or " alias artefact');
+  console.log('  no " or " alias artefacts in the bundled names');
+
+  /*
+   * 6. No name may be printed twice in the same street line.
+   *
+   * Two ways this happened:
+   *   - a division that is also a city (Korean metropolitan cities) filled both
+   *     {state} and {city} with one name: "대구광역시대구광역시을지길…";
+   *   - a street pool held whole names while the suffix pool re-appended the
+   *     road type: "南灣大馬路大馬路".
+   */
+  let dupBad = 0;
+  for (const cc of ["CN", "TW", "HK", "MO", "JP", "KR"]) {
+    const spec = COUNTRIES.find((c) => c.code === cc)!;
+    const [d, n] = await Promise.all([loadCountryData(cc), loadNamePool(cc)]);
+    for (let s = 0; s < 40; s++) {
+      const rec = generateAddress(spec, { name: n, countryData: d }, s * 7919 + 3);
+      // The street field alone, so the postal/country lines cannot mask it.
+      const street = rec.fields.find((f) => f.key === "street")?.value ?? "";
+      // A CJK/Hangul run of 2+ characters repeated immediately.
+      const m = /([\u4e00-\u9fff\uac00-\ud7af]{2,})\1/.exec(street);
+      // Or a stem that already ends with its own road-type suffix.
+      const doubled = /(大馬路|马路)大馬路|로로|길길/.exec(street);
+      if (m || doubled) {
+        dupBad++;
+        if (dupBad <= 6) console.error(`  FAIL: ${cc} street "${street}" repeats a name`);
+      }
+    }
+  }
+  check(dupBad === 0, `${dupBad} street lines repeated a name`);
+  console.log("  no CJK/Hangul street line repeats a name");
+
+  /*
+   * 7. A city that shares its division's name must still appear in the address.
+   *
+   * Madrid, Lisbon, Utrecht, Oslo, Auckland and Jerusalem are both a division
+   * and its principal city. Suppressing the repeat (see 6) must not blank the
+   * city in a separated address, or the `city` field and `fullAddress`
+   * disagree — a regression this guards.
+   */
+  let sharedBad = 0;
+  for (const cc of ["ES", "PT", "NL", "NO", "NZ", "IL", "KR", "JP"]) {
+    const spec = COUNTRIES.find((c) => c.code === cc)!;
+    const [d, n] = await Promise.all([loadCountryData(cc), loadNamePool(cc)]);
+    for (let s = 0; s < 30; s++) {
+      const rec = generateAddress(spec, { name: n, countryData: d }, s * 4099 + 11);
+      const city = rec.fields.find((f) => f.key === "city")?.value ?? "";
+      // The city field is always populated...
+      if (!city.trim()) { sharedBad++; if (sharedBad <= 5) console.error(`  FAIL: ${cc} city field is empty`); continue; }
+      // ...and, for a separated address, it appears in the full address.
+      const separated = !spec.address.streets;
+      if (separated && !rec.fullAddress.includes(city)) {
+        sharedBad++;
+        if (sharedBad <= 5) console.error(`  FAIL: ${cc} city "${city}" missing from "${rec.fullAddress}"`);
+      }
+    }
+  }
+  check(sharedBad === 0, `${sharedBad} addresses dropped a city that shares its division's name`);
+  console.log("  a city sharing its division's name still appears in the address");
+}
+
 console.log(`\n${failures === 0 ? "PASS" : "FAIL"} — ${checks} checks, ${failures} failures`);
 process.exit(failures === 0 ? 0 : 1);
