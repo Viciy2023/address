@@ -24,15 +24,37 @@ const cityCounts = {};
 let totalCities = 0;
 let totalDivisions = 0;
 
+/**
+ * Languages kept in the eager index.
+ *
+ * The index is imported statically by `data.ts`, so every byte ships on every
+ * page load. It only drives the division SELECTORS, which are shown in the
+ * interface language — so only the UI languages belong here.
+ *
+ * The record languages (ar, he, th, ru, …) are needed only when actually
+ * generating a record for that country, and they live in the lazily-loaded
+ * per-country files. Carrying them here too added ~117 KB gzip-inflating weight
+ * to every page for data most visits never read.
+ */
+const UI_LANGS = ["zh", "zh-hant", "en", "ja", "ko"];
+
 for (const file of fs.readdirSync(SRC).filter((f) => f.endsWith(".json"))) {
   const data = JSON.parse(fs.readFileSync(path.join(SRC, file), "utf8"));
   index[data.code] = {
     code: data.code,
     postalStyle: data.postalStyle,
     postalReal: data.postalReal,
-    // Division codes and localized names only — enough to populate the
-    // selectors in the active UI language.
-    states: data.states.map((s) => ({ code: s.code, name: s.name, nameL10n: s.nameL10n })),
+    // Division codes and UI-language names — enough to populate the selectors.
+    states: data.states.map((s) => {
+      const names = s.nameL10n
+        ? Object.fromEntries(Object.entries(s.nameL10n).filter(([l]) => UI_LANGS.includes(l)))
+        : undefined;
+      return {
+        code: s.code,
+        name: s.name,
+        nameL10n: names && Object.keys(names).length ? names : undefined,
+      };
+    }),
   };
   totalDivisions += data.states.length;
   const n = data.states.reduce((m, s) => m + s.cities.length, 0);

@@ -293,11 +293,16 @@ export const AU_STATE: Record<string, string> = {
 };
 
 export const CARD_BANKS: Record<string, Record<string, string[]>> = {
-  CN: { UnionPay: ["中国工商银行", "中国建设银行", "中国银行", "中国农业银行", "招商银行", "交通银行"] },
+  CN: {
+    UnionPay: ["中国工商银行", "中国建设银行", "中国银行", "中国农业银行", "招商银行", "交通银行"],
+    // The same banks issue Visa and Mastercard co-brands for international use.
+    Visa: ["中国银行", "中国工商银行", "招商银行", "交通银行"],
+    Mastercard: ["中国银行", "中国建设银行", "招商银行", "中信银行"],
+  },
   TW: { Visa: ["國泰世華銀行", "中國信託銀行", "台新銀行"], Mastercard: ["玉山銀行", "富邦銀行"], JCB: ["合作金庫銀行"] },
   HK: { Visa: ["滙豐銀行", "中國銀行（香港）", "恒生銀行"], Mastercard: ["渣打銀行", "東亞銀行"] },
   MO: { Visa: ["大西洋銀行", "中國銀行澳門分行"], Mastercard: ["澳門國際銀行"] },
-  JP: { JCB: ["三菱UFJ銀行", "三井住友銀行", "みずほ銀行"], Visa: ["楽天銀行", "ゆうちょ銀行"], Mastercard: ["三井住友カード"] },
+  JP: { JCB: ["三菱UFJ銀行", "三井住友銀行", "みずほ銀行"], Visa: ["楽天銀行", "ゆうちょ銀行"], Mastercard: ["三井住友カード"], Amex: ["アメリカン・エキスプレス"] },
   KR: { Visa: ["국민은행", "신한은행", "우리은행"], Mastercard: ["하나은행", "농협은행"], Amex: ["삼성카드"] },
   US: { Visa: ["Chase Bank", "Bank of America", "Wells Fargo", "Capital One"], Mastercard: ["Citibank", "Synchrony Bank"], Amex: ["American Express"], Discover: ["Discover Bank"] },
   CA: { Visa: ["RBC Royal Bank", "TD Canada Trust", "Scotiabank"], Mastercard: ["BMO Bank of Montreal", "CIBC"], Amex: ["American Express Canada"] },
@@ -1886,7 +1891,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "VN",
-    dataLang: "en",
+    dataLang: "vi",
     name: L("越南", "Vietnam", "ベトナム", "베트남"),
     nationality: L("越南", "Vietnamese", "ベトナム人", "베트남인"),
     language: L("越南语", "Vietnamese", "ベトナム語", "베트남어"),
@@ -1933,7 +1938,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "AE",
-    dataLang: "en",
+    dataLang: "ar",
     name: L("阿联酋", "United Arab Emirates", "アラブ首長国連邦", "아랍에미리트"),
     nationality: L("阿联酋", "Emirati", "アラブ首長国連邦人", "에미리트인"),
     language: L("阿拉伯语 / 英语", "Arabic / English", "アラビア語・英語", "아랍어 / 영어"),
@@ -1981,7 +1986,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "SA",
-    dataLang: "en",
+    dataLang: "ar",
     name: L("沙特阿拉伯", "Saudi Arabia", "サウジアラビア", "사우디아라비아"),
     nationality: L("沙特阿拉伯", "Saudi", "サウジアラビア人", "사우디인"),
     language: L("阿拉伯语", "Arabic", "アラビア語", "아랍어"),
@@ -2028,7 +2033,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "IL",
-    dataLang: "en",
+    dataLang: "he",
     name: L("以色列", "Israel", "イスラエル", "이스라엘"),
     nationality: L("以色列", "Israeli", "イスラエル人", "이스라엘인"),
     language: L("希伯来语", "Hebrew", "ヘブライ語", "히브리어"),
@@ -2075,7 +2080,7 @@ export const COUNTRIES: CountrySpec[] = [
   },
   {
     code: "TR",
-    dataLang: "en",
+    dataLang: "tr",
     name: L("土耳其", "Turkey", "トルコ", "튀르키예"),
     nationality: L("土耳其", "Turkish", "トルコ人", "터키인"),
     language: L("土耳其语", "Turkish", "トルコ語", "터키어"),

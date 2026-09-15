@@ -98,6 +98,45 @@ function buildNumber(id: NetworkId, rng: Rng, forcedLength?: number): string {
   return body + String(luhnCheckDigit(body));
 }
 
+/**
+ * A card number for `network`, drawn from that network's real IIN ranges and
+ * lengths — the single implementation used by both the card page and the
+ * identity generator's card field.
+ *
+ * The identity generator used to carry its own copy of this: prefixes "4",
+ * "51-55", "6011"/"65", a fixed 15-or-16 length. That copy produced no
+ * 19-digit numbers at all (Visa, UnionPay, Discover and JCB all issue them
+ * sometimes) and drew UnionPay from a bare "62", which lands in the
+ * 622126-622925 block ISO assigns to Discover. Routing both callers here means
+ * one table, one set of rules, and no way for the two to disagree again.
+ *
+ * `group` controls whether the number is returned print-grouped ("4539 1488 …")
+ * or as plain digits.
+ */
+export function buildCardNumber(network: NetworkId, rng: Rng, group = true): string {
+  const digits = buildNumber(network, rng);
+  return group ? formatNumber(digits, network) : digits;
+}
+
+/**
+ * Maps the identity registry's issuer label to a `NetworkId`.
+ *
+ * The registry uses human labels ("Visa", "Mastercard", "Amex", "UnionPay",
+ * "Diners"); a couple of spellings differ, so they are normalised here rather
+ * than at every call site.
+ */
+export function networkFromLabel(label: string): NetworkId | null {
+  const key = label.trim().toLowerCase();
+  if (key === "visa") return "Visa";
+  if (key === "mastercard") return "Mastercard";
+  if (key === "amex" || key === "american express") return "Amex";
+  if (key === "discover") return "Discover";
+  if (key === "jcb") return "JCB";
+  if (key === "unionpay") return "UnionPay";
+  if (key === "diners") return "Diners";
+  return null;
+}
+
 function expiry(rng: Rng): { month: number; year: number; text: string } {
   const now = new Date();
   const year = now.getFullYear() + rng.int(1, 5);

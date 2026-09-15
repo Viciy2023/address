@@ -273,13 +273,16 @@ const HK_MO_NAMES = {
 function buildNameL10n(loc, ascii) {
   const KANA = /[\u3040-\u309F\u30A0-\u30FF]/;
 
-  const candidates = {
-    zh: loc?.zh,
-    en: loc?.en,
-    ja: loc?.ja,
-    ko: loc?.ko,
-    ru: loc?.ru,
-  };
+  /*
+   * Every language the loader collected, passed straight through.
+   *
+   * This was a hard-coded {zh,en,ja,ko,ru} object, so a name GeoNames supplied
+   * in Arabic, Hebrew, Thai or Vietnamese was dropped on the floor even after
+   * the loader had been widened to fetch it. The result was a Saudi address
+   * reading "طريق التحلية, Dammam, Eastern Province" — Arabic street, English
+   * everything else — and the same for Israel, the UAE and Thailand.
+   */
+  const candidates = { ...(loc ?? {}) };
 
   if (!candidates.zh && candidates.ja && !KANA.test(candidates.ja)) {
     candidates.zh = candidates.ja;
@@ -326,6 +329,13 @@ function loadCities() {
       // Kept so the localized-name pass can join on it.
       id: c[0],
       name: c[1],
+      ascii: c[2],
+      /*
+       * The alternatenames column, kept so a city can be matched to a postal
+       * dump that names the locality in the local script (Майкоп, 추자면). It is
+       * only used during the build and never reaches the shipped JSON.
+       */
+      alt: c[3] || "",
       admin1: c[10],
       pop: Number(c[14]) || 0,
       tz: c[17] || "",
@@ -384,6 +394,41 @@ function normalizeDivision(name) {
 }
 
 /**
+ * Normalises a PLACE name for matching while keeping every script.
+ *
+ * `normalizeDivision` keeps only [a-z0-9], which is right for the ASCII admin-1
+ * names it is used on but destroys anything else: a Cyrillic locality such as
+ * "Майкоп", a Hangul one such as "추자면" or a Han one such as "海淀区" all
+ * collapse to the empty string and then silently fail to match.
+ *
+ * That is exactly why Russia's postal dump appeared to match nothing. Keeping
+ * Unicode letters and digits fixes it: the postal dumps for RU, KR, JP and CN
+ * name localities in the local script, and cities5000 carries those same forms
+ * in its alternatenames column.
+ */
+function normalizePlace(name) {
+  if (!name) return "";
+  return name
+    /*
+     * NFC first, then NFC AGAIN after stripping combining marks.
+     *
+     * GeoNames' Korean dump stores Hangul in DECOMPOSED form (NFD): "추자면"
+     * arrives as U+110E U+116E U+110C U+1161 U+1106 U+1167 U+11AB, seven jamo
+     * rather than three syllables. cities5000 stores the composed form, so the
+     * two never matched and Korea's per-city postcodes stayed empty.
+     *
+     * Composing the jamo into syllables is what makes the comparison work; this
+     * is why plain NFD-stripping (for Latin accents) was not enough.
+     */
+    .normalize("NFC")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/[\p{P}\p{Z}\p{S}]/gu, ""); // drop punctuation, spaces, symbols
+}
+
+/**
  * Reads GeoNames' `alternateNames` dump once and extracts both admin-1 and city
  * names, keyed by geonameid.
  *
@@ -438,7 +483,17 @@ function loadAlternateNames() {
     if (c[0] && CODES.includes(c[8])) cityIds.add(c[0]);
   }
 
-  const WANTED = new Set(["zh", "en", "ja", "ko", "ru"]);
+  /*
+   * Languages pulled from the alternate-names dump.
+   *
+   * This must cover every record language the registry uses, or a country's
+   * cities stay romanised beside local-script street names. Thai, Arabic and
+   * Hebrew were previously absent, which is why a Thai address read
+   * "ซอยพระราม, Bang Bo District, สมุทรปราการ" — Thai street, English city.
+   * GeoNames does carry those forms (probed: SA 128 Arabic rows, IL 396 Hebrew,
+   * TH 453 Thai), they simply were not being read.
+   */
+  const WANTED = new Set(["zh", "en", "ja", "ko", "ru", "th", "ar", "he", "vi", "tr"]);
   const admin1 = new Map();
   const cities = new Map();
 
@@ -516,10 +571,32 @@ function loadPostal(cc) {
 
   const byName = new Map();
   const byCity = new Map();
+  /*
+   * Postcodes keyed by the dump's OWN locality name, script preserved.
+   *
+   * Several dumps name the locality in the local script (Майкоп, 추자면) rather
+   * than the ASCII form cities5000 uses for `name`. `byCity` is keyed through
+   * `normalizeDivision`, which keeps only [a-z0-9] and so erased those names
+   * entirely; this index keeps them so a city can be found via the local form
+   * carried in its alternatenames.
+   */
+  const byLocality = new Map();
+  /*
+   * Postcodes keyed by the town inside brackets, for dumps that name a region
+   * and put a representative town in parentheses — Canada's
+   * "Eastern Alberta (St. Paul)".
+   */
+  const byParen = new Map();
   const add = (map, key, code) => {
     if (!key) return;
     if (!map.has(key)) map.set(key, new Set());
     map.get(key).add(code);
+  };
+  const addPlace = (map, key, code) => {
+    const k = normalizePlace(key);
+    if (!k) return;
+    if (!map.has(k)) map.set(k, new Set());
+    map.get(k).add(code);
   };
 
   for (const line of fs.readFileSync(cached, "utf8").split("\n")) {
@@ -545,10 +622,14 @@ function loadPostal(cc) {
     if (!division) division = adminName;
     add(byName, normalizeDivision(division), code);
     add(byCity, normalizeDivision(cityName), code);
+    addPlace(byLocality, cityName, code);
+    // "Eastern Alberta (St. Paul)" -> index "St. Paul" as well.
+    const paren = /\(([^)]+)\)/.exec(cityName);
+    if (paren) addPlace(byParen, paren[1], code);
   }
 
   if (!byName.size && !byCity.size) return null;
-  return { byName, byCity };
+  return { byName, byCity, byLocality, byParen };
 }
 
 /**
@@ -581,27 +662,97 @@ function pickPostalExamples(postal, divisionName, cityNames) {
     if (best && bestScore >= Math.ceil(tokens.length / 2)) return [...best];
   }
 
-  // City-level aggregation --the workhorse for dumps with no division column.
+  // City-level aggregation --the workhorse for dumps with no division column,
+  // and the only source for local-script dumps, whose locality names live in
+  // `byLocality` rather than in the ASCII-keyed `byCity`.
   const out = new Set();
   for (const name of cityNames) {
     const hit = postal.byCity.get(normalizeDivision(name));
     if (hit) for (const v of hit) out.add(v);
+    if (postal.byLocality) {
+      const hit2 = postal.byLocality.get(normalizePlace(name));
+      if (hit2) for (const v of hit2) out.add(v);
+    }
   }
   return out.size ? [...out] : null;
 }
 
 /**
- * The real postcodes recorded for one city, or null.
+ * The real postcodes recorded for one city, matched on any name it goes by.
  *
- * Capped at 12: a handful of postcodes is enough to make the city's own code
- * appear, and the cap keeps the bundled JSON small for dumps where a single
- * city (a capital, typically) has thousands.
+ * Three indexes are consulted, in order:
+ *
+ *   byCity      keyed by the ASCII name through `normalizeDivision`. Works for
+ *               dumps that already use the ASCII form (US, GB, DE, …).
+ *   byLocality  keyed by the dump's own locality name with the script kept, so
+ *               a city can be found through the local form in its alternatenames
+ *               (Майкоп for Ulyanovsk Oblast's cities, 흥해 for Heunghae).
+ *   affixes     a fallback that strips the administrative suffix the postal dump
+ *               appends but a city name does not carry: Korea's dump lists
+ *               "흥해읍" where the city is "흥해", Japan's "栄町" beside "栄".
+ *
+ * Without the local-script and affix passes the RU/KR/JP dumps matched little or
+ * nothing, which is why those countries had no per-city postcodes.
+ *
+ * Capped at 12: a handful is enough for the city's own code to appear, and the
+ * cap keeps the bundled JSON small where a capital has thousands.
  */
-function cityPostals(postal, cityName) {
+function cityPostals(postal, city) {
   if (!postal) return null;
-  const hit = postal.byCity.get(normalizeDivision(cityName));
-  if (!hit || !hit.size) return null;
-  return [...hit].slice(0, 12);
+  const out = new Set();
+
+  const ascii = normalizeDivision(city.name);
+  if (ascii) {
+    const hit = postal.byCity.get(ascii);
+    if (hit) for (const v of hit) out.add(v);
+  }
+
+  if (postal.byLocality) {
+    const names = [city.name, city.ascii, ...(city.alt ? city.alt.split(",") : [])];
+    const prefixes = [];
+    for (const n of names) {
+      const k = normalizePlace(n);
+      if (!k) continue;
+      const hit = postal.byLocality.get(k);
+      if (hit) for (const v of hit) out.add(v);
+      if (k.length >= 2) prefixes.push(k);
+    }
+
+    // Affix pass: find a locality that STARTS WITH the city's name and has only
+    // a short administrative tail after it (읍/면/시/군/동/町/村… two chars max).
+    // A prefix longer than that risks matching an unrelated place.
+    if (out.size === 0 && prefixes.length) {
+      for (const [locality, codes] of postal.byLocality) {
+        if (locality.length <= 2) continue;
+        for (const p of prefixes) {
+          if (locality.startsWith(p) && locality.length - p.length <= 2) {
+            for (const v of codes) out.add(v);
+            break;
+          }
+        }
+      }
+    }
+
+    /*
+     * Parenthesised pass, last resort.
+     *
+     * Canada's dump names the postal REGION and puts a representative town in
+     * brackets: "Eastern Alberta (St. Paul)", "Wainwright Region (Tofield)".
+     * The city a caller actually wants is the bracketed one, so it is indexed
+     * separately and matched here.
+     */
+    if (out.size === 0) {
+      for (const n of names) {
+        const k = normalizePlace(n);
+        if (!k) continue;
+        const hit = postal.byParen.get(k);
+        if (hit) for (const v of hit) out.add(v);
+      }
+    }
+  }
+
+  if (!out.size) return null;
+  return [...out].slice(0, 12);
 }
 
 /** Format-correct placeholder used when a division has no recorded postal codes. */
@@ -715,7 +866,7 @@ for (const cc of CODES) {
         // The city's own real postcodes, where the dump records them. The
         // generator prefers these over the division set, which is what keeps a
         // postcode inside the city it is printed beside.
-        const own = cityPostals(postal, c.name);
+        const own = cityPostals(postal, c);
         return {
           n: c.name,
           // Localized city name, same reasoning as the division name: the CJK

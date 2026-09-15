@@ -1740,5 +1740,157 @@ console.log("\n=== national ID check digits (spec-verified) ===");
   console.log(`  ${Object.keys(NO_PUBLISHED_CHECKSUM).length} schemes documented as having no published checksum`);
 }
 
+console.log("\n=== identity card fields use the real card tables ===");
+{
+  /*
+   * The identity record's card number used to be built from its own small table
+   * inside the generator: prefixes "4", "51"-"55", "6011"/"65", a fixed 15-or-16
+   * length and a bare "62" for UnionPay. The card PAGE had already been fixed for
+   * all of that, but nothing propagated back — so the two features disagreed and
+   * the identity record produced no 19-digit cards and drew UnionPay from the
+   * block ISO assigns to Discover.
+   *
+   * Both now call one builder. These checks assert the shared behaviour holds for
+   * the identity path specifically.
+   */
+  const { NETWORKS, detectNetwork } = await import("../src/lib/card/networks.ts");
+  const { isValidLuhn } = await import("../src/lib/card/luhn.ts");
+
+  const spec = COUNTRY_BY_CODE.US;
+  const data = getCountryData("US")!;
+  const name = getNamePool("US");
+
+  const byNet = new Map<string, Set<number>>();
+  const prefixes = new Map<string, Set<string>>();
+  let luhnBad = 0;
+  let detectBad = 0;
+  for (let i = 0; i < 3000; i++) {
+    const id = generateIdentity(spec, { name, countryData: data }, { country: "US", seed: i * 7919 + 1 });
+    const issuer = id.map.cardIssuer;
+    const digits = (id.map.cardNumber ?? "").replace(/\D/g, "");
+    if (!isValidLuhn(digits)) luhnBad++;
+    // The number must self-identify as the issuer the record claims.
+    const detected = detectNetwork(digits);
+    if (detected && detected !== issuer) detectBad++;
+    if (!byNet.has(issuer)) byNet.set(issuer, new Set());
+    byNet.get(issuer)!.add(digits.length);
+    if (!prefixes.has(issuer)) prefixes.set(issuer, new Set());
+    prefixes.get(issuer)!.add(digits.slice(0, 2));
+  }
+
+  check(luhnBad === 0, `${luhnBad}/3000 identity card numbers fail Luhn`);
+  check(detectBad === 0, `${detectBad} identity card numbers do not detect as their stated issuer`);
+  console.log("  3000 identity card numbers are Luhn-valid and self-detect as their issuer");
+
+  // Lengths must be the real ones — in particular 19 must appear for the networks
+  // that issue it, which the old local table could never produce.
+  const VISA_LIKE = ["Visa", "Mastercard", "Amex", "Discover"] as const;
+  let lenBad = 0;
+  for (const net of VISA_LIKE) {
+    const lens = byNet.get(net);
+    if (!lens) continue;
+    for (const l of lens) {
+      if (!NETWORKS[net as keyof typeof NETWORKS].lengths.includes(l)) {
+        lenBad++;
+        console.error(`  FAIL: identity ${net} produced length ${l}, real lengths are ${NETWORKS[net as keyof typeof NETWORKS].lengths}`);
+      }
+    }
+  }
+  check(lenBad === 0, `${lenBad} identity card numbers have a length their network does not issue`);
+  const any19 = [...byNet.values()].some((s) => s.has(19));
+  check(any19, "identity card numbers never use 19 digits, which Visa/UnionPay/Discover/JCB all issue");
+  console.log("  identity card lengths match each network's real set (19-digit numbers appear)");
+
+  // Mastercard's 2-series and Discover's wider range must be reachable.
+  const mc = [...(prefixes.get("Mastercard") ?? [])];
+  check(mc.some((p) => Number(p) >= 22 && Number(p) <= 27), "Mastercard 2-series is unreachable from the identity generator");
+  console.log("  Mastercard 2-series (2221-2720) is reachable");
+
+  // UnionPay must stay out of the block ISO assigns to Discover.
+  const cnSpec = COUNTRY_BY_CODE.CN;
+  const cnData = getCountryData("CN")!;
+  const cnName = getNamePool("CN");
+  let inDiscoverBlock = 0;
+  let upTotal = 0;
+  for (let i = 0; i < 2000; i++) {
+    const id = generateIdentity(cnSpec, { name: cnName, countryData: cnData }, { country: "CN", seed: i * 2654435761 >>> 0 });
+    if (id.map.cardIssuer !== "UnionPay") continue;
+    upTotal++;
+    const six = Number((id.map.cardNumber ?? "").replace(/\D/g, "").slice(0, 6));
+    if (six >= 622126 && six <= 622925) inDiscoverBlock++;
+  }
+  check(inDiscoverBlock === 0, `${inDiscoverBlock}/${upTotal} identity UnionPay numbers fall in Discover's 622126-622925 block`);
+  console.log(`  ${upTotal} UnionPay numbers, none in Discover's block`);
+
+  /*
+   * Every network a country declares must actually be reachable. CN declared
+   * Visa and Mastercard with no issuing banks, and JP declared Amex likewise, so
+   * the declaration was unreachable and the co-brands never appeared.
+   */
+  const { CARD_NETWORKS, CARD_BANKS } = await import("../src/lib/registry.ts");
+  let unreachable = 0;
+  for (const cc of COUNTRY_CODES) {
+    const declared = CARD_NETWORKS[cc] ?? [];
+    const banks = CARD_BANKS[cc] ?? {};
+    for (const net of declared) {
+      if (!(banks[net]?.length)) {
+        unreachable++;
+        console.error(`  FAIL: ${cc} declares ${net} but has no issuing bank for it`);
+      }
+    }
+  }
+  check(unreachable === 0, `${unreachable} declared card networks have no issuing bank`);
+  console.log("  every declared card network has an issuing bank");
+}
+
+console.log("\n=== address language consistency ===");
+{
+  /*
+   * The record language must match the script the data is actually in. SA, IL,
+   * AE, VN and TR were marked `dataLang: "en"` while their name pools and street
+   * pools were already Arabic, Hebrew, Vietnamese and Turkish — so a Saudi
+   * address read "طريق التحلية, Dammam, Eastern Province", mixing scripts.
+   *
+   * The check is direct rather than a list: whatever language a country declares,
+   * its generated address must use that language's script where the language has
+   * one of its own.
+   */
+  const SCRIPT: Record<string, RegExp> = {
+    ru: /[\u0400-\u04FF]/,
+    th: /[\u0E00-\u0E7F]/,
+    ar: /[\u0600-\u06FF]/,
+    he: /[\u0590-\u05FF]/,
+    ja: /[\u3040-\u30FF\u4E00-\u9FFF]/,
+    ko: /[\uAC00-\uD7AF]/,
+    zh: /[\u4E00-\u9FFF]/,
+    vi: /[\u0100-\u017F\u1EA0-\u1EFF]/,
+    tr: /[çğıöşüÇĞİÖŞÜ]/,
+  };
+
+  let scriptBad = 0;
+  for (const cc of COUNTRY_CODES) {
+    const spec = COUNTRY_BY_CODE[cc];
+    const re = SCRIPT[spec.dataLang];
+    if (!re) continue;
+    const data = getCountryData(cc);
+    if (!data) continue;
+    const name = getNamePool(cc);
+    const addresses: string[] = [];
+    for (const seed of [11, 22, 33, 44, 55]) {
+      const id = generateIdentity(spec, { name, countryData: data }, { country: cc, seed });
+      addresses.push(id.map.fullAddress ?? "");
+    }
+    // Every address must contain at least one character of the record's script.
+    for (const a of addresses) {
+      if (!re.test(a)) {
+        scriptBad++;
+        if (scriptBad <= 5) console.error(`  FAIL: ${cc} (${spec.dataLang}) address has no ${spec.dataLang} script: ${JSON.stringify(a)}`);
+      }
+    }
+  }
+  check(scriptBad === 0, `${scriptBad} addresses are not written in their country's declared language script`);
+  console.log("  every address uses its country's declared language script");
+}
+
 console.log(`\n${failures === 0 ? "PASS" : "FAIL"} — ${checks} checks, ${failures} failures`);
 process.exit(failures === 0 ? 0 : 1);

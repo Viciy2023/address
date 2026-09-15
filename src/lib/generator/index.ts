@@ -18,7 +18,7 @@
 import { Rng } from "./rng.js";
 import { makePostal } from "./postal.js";
 import { makeNationalId } from "./identifiers.js";
-import { luhnCheckDigit } from "../card/luhn.js";
+import { buildCardNumber, networkFromLabel } from "../card/generate.js";
 import type { CountrySpec, DataLang, LocalizedText, Lang } from "../registry.js";
 import {
   AU_STATE,
@@ -328,29 +328,24 @@ function genderLabel(gender: "male" | "female"): L10n {
 /**
  * Luhn-valid card number for the given issuer.
  *
- * The check-digit arithmetic is shared with the standalone card generator
- * (`lib/card/luhn.ts`) so there is one implementation of Luhn in the codebase.
- * Prefixes and lengths stay local here because the identity generator only
- * needs one plausible number per record; the card generator owns the wider
- * prefix tables.
+ * Delegates to the standalone card generator (`lib/card/`) so the identity
+ * record and the card page share ONE prefix table, one length table and one
+ * Luhn implementation.
+ *
+ * The previous local copy drew UnionPay from a bare "62", which lands in the
+ * 622126-622925 block that ISO assigns to Discover, and hard-coded a 15-or-16
+ * length, so it never produced the 19-digit numbers Visa, UnionPay, Discover and
+ * JCB also issue. The card page had already been fixed for both; nothing
+ * propagated back here. There is now no second implementation to drift.
  */
 function makeCardNumber(issuer: string, rng: Rng): string {
-  const prefix = {
-    Visa: "4",
-    Mastercard: String(rng.int(51, 55)),
-    Amex: rng.pick(["34", "37"]),
-    Discover: rng.pick(["6011", "65"]),
-    JCB: "35",
-    UnionPay: "62",
-    Diners: "36",
-  }[issuer] ?? "4";
+  const network = networkFromLabel(issuer) ?? "Visa";
+  return buildCardNumber(network, rng, true);
+}
 
-  const total = issuer === "Amex" ? 15 : 16;
-  const body = prefix + rng.digits(total - prefix.length - 1);
-  const full = body + String(luhnCheckDigit(body));
-
-  if (issuer === "Amex") return `${full.slice(0, 4)} ${full.slice(4, 10)} ${full.slice(10)}`;
-  return full.replace(/(.{4})/g, "$1 ").trim();
+/** CVV width for an issuer: four for Amex, three for every other network. */
+function cardCvvLength(issuer: string): number {
+  return networkFromLabel(issuer) === "Amex" ? 4 : 3;
 }
 
 /** Deterministic avatar seed that matches the generated person. */
@@ -763,7 +758,7 @@ export function generateIdentity(
   const cardNumber = makeCardNumber(issuer, rng);
   const expYear = rng.int(today.getFullYear() + 1, today.getFullYear() + 5);
   const expMonth = rng.int(1, 12);
-  const cvv = issuer === "Amex" ? rng.digits(4) : rng.digits(3);
+  const cvv = rng.digits(cardCvvLength(issuer));
 
   /* ---- education ---- */
   const school = spec.schools.length ? rng.pick(spec.schools) : "State University";
