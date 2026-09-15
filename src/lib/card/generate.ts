@@ -14,11 +14,12 @@
  */
 
 import { Rng, seedFromString } from "../generator/rng.js";
-import { luhnCheckDigit, digitsOnly } from "./luhn.js";
+import { luhnCheckDigit } from "./luhn.js";
 import {
   NETWORKS,
   NETWORK_ORDER,
   detectNetwork,
+  guessNetwork,
   formatNumber,
   type NetworkId,
 } from "./networks.js";
@@ -166,27 +167,25 @@ export interface CompleteResult {
   error: "empty" | "tooShort" | "tooLong" | "unknownPrefix" | "badChars" | null;
 }
 
-/** A card number is never shorter than this, whatever the mask says. */
-const MIN_LENGTH = 12;
-const MAX_LENGTH = 19;
-
 /**
- * Fills a partial number to a full, Luhn-valid one.
+ * Fills a partial number to a full, Luhn-valid one for the network the input
+ * belongs to.
  *
- * Accepts spaces and hyphens anywhere, `x` or `*` for the positions to fill,
- * and a leading run of digits. The visitor's digits are never changed: only
- * placeholders, any positions past the last typed digit, and the final check
- * digit are written.
+ * Accepts spaces and hyphens anywhere, and `x` or `*` for the positions to
+ * fill. Two behaviours worth stating plainly:
  *
- * Length rule, which is the part worth stating plainly:
- *   - a mask (with placeholders) fixes the length at its character count;
- *   - a plain number of a length the network actually issues is kept, and its
- *     last digit is recomputed as the check digit;
- *   - any other plain number is treated as a prefix and padded to the network's
- *     common length (16, or 15 for Amex and 14 for Diners).
+ *   - The visitor's digits are never changed. Only placeholders, any positions
+ *     past the last typed digit, and the final check digit are written.
+ *   - The length is always one the network actually issues. A mask sets the
+ *     length; a bare prefix is padded to the network's common length; a typed
+ *     number already at an issued length keeps it. It is never padded into a
+ *     length the network does not use (no 19-digit JCB), because a number of
+ *     the wrong length is not a plausible test card at all.
  *
- * Either way the result must land in [12, 19] digits; anything else is refused
- * rather than dressed up as a card.
+ * The network is read from the typed digits. When those digits are ambiguous —
+ * "62" alone could be UnionPay or, at length 6222xx, Discover — the *finished*
+ * number decides the label, so the card is never shown under a network its own
+ * digits contradict.
  */
 export function completeCard(raw: string, seed: number): CompleteResult {
   const stripped = raw.trim().toUpperCase();
@@ -197,35 +196,56 @@ export function completeCard(raw: string, seed: number): CompleteResult {
   const digitCount = mask.replace(PLACEHOLDER, "").length;
   if (digitCount < 1) return { card: null, error: "empty" };
 
-  // Resolve the network from the typed digits, with placeholders treated as
-  // zeros so a mask like "37xxx..." still identifies Amex from its "37".
+  // Resolve the network from the typed digits. Placeholders are treated as
+  // zeros so a mask like "37xxx..." is still identified as Amex from its "37".
   const known = mask.replace(PLACEHOLDER, "0");
-  const network =
-    detectNetwork(known.slice(0, 8)) ?? detectNetwork(known.slice(0, 4)) ?? detectNetwork(known);
+  const network = detectNetwork(known) ?? guessNetwork(known);
   if (!network) return { card: null, error: "unknownPrefix" };
 
   const net = NETWORKS[network];
   const hasMask = PLACEHOLDER.test(mask);
   PLACEHOLDER.lastIndex = 0;
 
+  /*
+   * Choose the target length — always an issued length for this network.
+   *
+   *   mask            -> the mask's own length, checked against the issued set
+   *   issued length   -> keep it
+   *   longer          -> the smallest issued length at or above it
+   *   shorter/prefix  -> the common (first) issued length
+   */
   let target: number;
+  const issued = net.lengths;
   if (hasMask) {
-    // The mask states the intended length.
+    /*
+     * A mask states its own length, so a mask shorter than any card the network
+     * issues is refused rather than stretched: "54**" is four characters, and
+     * quietly turning it into a 16-digit number would ignore what was typed.
+     * The bare-prefix path below is the way to ask for "pad this up".
+     */
+    if (mask.length < Math.min(...issued)) return { card: null, error: "tooShort" };
     target = mask.length;
-  } else if (net.lengths.includes(mask.length)) {
+  } else if (issued.includes(mask.length)) {
     target = mask.length;
   } else {
-    // A bare prefix: pad to the network's common length. Never truncate.
-    target = net.lengths[0];
-    if (mask.length >= target) {
-      // Typed digits already reach the common length but not a supported one
-      // (e.g. 17 digits for Visa, which issues 16 and 19): round up.
-      target = net.lengths.find((l) => l >= mask.length) ?? mask.length + 1;
-    }
+    const above = issued.find((l) => l >= mask.length);
+    target = above ?? issued[issued.length - 1];
+    // A bare prefix shorter than every issued length pads up to the common one.
+    if (mask.length < Math.min(...issued)) target = issued[0];
   }
 
-  if (target < MIN_LENGTH) return { card: null, error: "tooShort" };
-  if (target > MAX_LENGTH) return { card: null, error: "tooLong" };
+  // A mask may still state a length the network does not issue; snap it to the
+  // nearest issued length at or above so the result is always plausible.
+  if (!issued.includes(target)) {
+    const above = issued.find((l) => l >= target);
+    if (!above) return { card: null, error: "tooLong" };
+    // Never shrink below what the visitor typed.
+    if (above < digitCount) return { card: null, error: "tooLong" };
+    target = above;
+  }
+
+  if (target > 19) return { card: null, error: "tooLong" };
+  if (target < 12) return { card: null, error: "tooShort" };
 
   const rng = new Rng(seed);
   // Fill positions 0..target-2, honouring typed digits; position target-1 is
@@ -238,18 +258,24 @@ export function completeCard(raw: string, seed: number): CompleteResult {
   const body = bodyChars.join("");
   const number = body + String(luhnCheckDigit(body));
 
-  /*
-   * Label the card by what the *finished* number detects as, not by what the
-   * partial prefix suggested.
-   *
-   * A typed prefix can be ambiguous: "6222" is UnionPay by length-2 detection
-   * but the full 6222xx range sits in the block ISO assigns to Discover. The
-   * finished number is the authority, so re-detecting it keeps the label honest
-   * rather than showing a Discover-shaped number under a UnionPay heading.
-   */
+  // The finished number is the authority on which network it is.
   const finalNetwork = detectNetwork(number) ?? network;
   const seedStr = (seed >>> 0).toString(36);
   return { card: decorate(finalNetwork, number, rng, seedStr), error: null };
+}
+
+/**
+ * A batch of completions from one partial number.
+ *
+ * Each card is filled from a different seed so the batch varies, while the
+ * digits the visitor typed are identical in every one.
+ */
+export function completeCards(raw: string, count: number, seed: number): CompleteResult[] {
+  const out: CompleteResult[] = [];
+  for (let i = 0; i < count; i++) {
+    out.push(completeCard(raw, (seed + i * 0x9e3779b1) >>> 0));
+  }
+  return out;
 }
 
 /** A seed from arbitrary text, so a typed mask reproduces the same filling. */

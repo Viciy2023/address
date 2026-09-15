@@ -1142,8 +1142,38 @@ console.log("\n=== card generator ===");
    * typed.
    */
   const { NETWORKS, NETWORK_ORDER, detectNetwork } = await import("../src/lib/card/networks.ts");
-  const { generateCard, generateCards, completeCard, seedForInput } = await import("../src/lib/card/generate.ts");
+  const { generateCard, generateCards, completeCard, completeCards, seedForInput } = await import("../src/lib/card/generate.ts");
   const { isValidLuhn, luhnCheckDigit } = await import("../src/lib/card/luhn.ts");
+
+  /*
+   * The real issuer ranges, as documented for each scheme (ISO/IEC 7812;
+   * Wikipedia "Payment card number"). A test number is only useful if a real
+   * payment form accepts its length and prefix, so these are asserted directly
+   * against the table the generator uses.
+   */
+  const REAL_FORMATS: Record<string, { lengths: number[]; cvv: number }> = {
+    Visa: { lengths: [16, 19], cvv: 3 },
+    Mastercard: { lengths: [16], cvv: 3 },
+    Amex: { lengths: [15], cvv: 4 },
+    Discover: { lengths: [16, 19], cvv: 3 },
+    JCB: { lengths: [16], cvv: 3 },
+    UnionPay: { lengths: [16, 19], cvv: 3 },
+    Diners: { lengths: [14, 16], cvv: 3 },
+  };
+  let fmtBad = 0;
+  for (const [id, want] of Object.entries(REAL_FORMATS)) {
+    const net = NETWORKS[id as keyof typeof NETWORKS];
+    if (JSON.stringify(net.lengths) !== JSON.stringify(want.lengths)) {
+      fmtBad++;
+      console.error(`  FAIL: ${id} lengths ${JSON.stringify(net.lengths)}, real ones are ${JSON.stringify(want.lengths)}`);
+    }
+    if (net.cvv !== want.cvv) {
+      fmtBad++;
+      console.error(`  FAIL: ${id} cvv length ${net.cvv}, real is ${want.cvv}`);
+    }
+  }
+  check(fmtBad === 0, `${fmtBad} network lengths/CVV disagree with the real card formats`);
+  console.log(`  ${Object.keys(REAL_FORMATS).length} networks match their real lengths and CVV widths`);
 
   // Luhn helper against known-valid published test numbers.
   const knownValid = [
@@ -1181,6 +1211,30 @@ console.log("\n=== card generator ===");
   check(netBad === 0, `${netBad}/${netChecked} generated cards were malformed`);
   console.log(`  ${netChecked - netBad}/${netChecked} generated cards are Luhn-valid with the right length and network`);
 
+  /*
+   * The rendered number must always show every digit. The card face sizes the
+   * number from the card's width; a number longer than the rendering allows
+   * would be clipped, which is what the reported JCB/UnionPay defect was. This
+   * checks the formatting keeps every digit and the grouped string is a simple
+   * re-spacing of the raw number.
+   */
+  let clipBad = 0;
+  for (const id of NETWORK_ORDER) {
+    for (const len of NETWORKS[id].lengths) {
+      const rng = new (await import("../src/lib/generator/rng.ts")).Rng(1);
+      // Build a number of exactly this length via completion of a mask.
+      const mask = NETWORKS[id].prefixes[0] + "x".repeat(Math.max(len - NETWORKS[id].prefixes[0].length, 1));
+      const r = completeCard(mask, 1);
+      if (!r.card) continue;
+      const raw = r.card.number;
+      const shown = r.card.formatted.replace(/\s+/g, "");
+      if (shown !== raw) { clipBad++; console.error(`  FAIL: ${id} displayed "${r.card.formatted}" loses digits from ${raw}`); }
+      void rng;
+    }
+  }
+  check(clipBad === 0, `${clipBad} displayed card numbers did not contain every digit`);
+  console.log("  every displayed number keeps all its digits after grouping");
+
   // Random choice must actually reach every network across enough draws.
   const seen = new Set<string>();
   for (let s = 0; s < 400; s++) seen.add(generateCard("random", s).network);
@@ -1203,10 +1257,11 @@ console.log("\n=== card generator ===");
     if (!r.card) { compBad++; console.error(`  FAIL: completeCard(${JSON.stringify(input)}) returned ${r.error}`); continue; }
     if (!isValidLuhn(r.card.number)) { compBad++; console.error(`  FAIL: completed ${r.card.number} is not Luhn-valid`); }
     if (!r.card.number.startsWith(typed)) { compBad++; console.error(`  FAIL: completeCard(${JSON.stringify(input)}) dropped typed digits: ${r.card.number}`); }
-    if (r.card.number.length < 12 || r.card.number.length > 19) { compBad++; console.error(`  FAIL: completed length ${r.card.number.length} out of range`); }
+    const netLen = NETWORKS[r.card.network].lengths;
+    if (!netLen.includes(r.card.number.length)) { compBad++; console.error(`  FAIL: completed ${r.card.number} has length ${r.card.number.length}, not a real ${r.card.network} length ${JSON.stringify(netLen)}`); }
   }
   check(compBad === 0, `${compBad}/${partials.length} completions were wrong`);
-  console.log(`  ${partials.length - compBad}/${partials.length} partial numbers completed, typed digits preserved`);
+  console.log(`  ${partials.length - compBad}/${partials.length} partial numbers completed, typed digits preserved, real lengths used`);
 
   // Refusals: a mask that cannot reach card length, and an unknown prefix.
   const refusals: [string, string][] = [
@@ -1240,6 +1295,18 @@ console.log("\n=== card generator ===");
   }
   check(labelBad === 0, `${labelBad} completed cards were labelled inconsistently`);
   console.log("  completed cards are labelled by their finished number");
+
+  // Batch completion: several cards, all sharing the typed digits.
+  const batchComplete = completeCards("4111xxxxxxxxxxxx", 5, 12345);
+  const bcCards = batchComplete.flatMap((r) => (r.card ? [r.card] : []));
+  const bcUnique = new Set(bcCards.map((c) => c.number));
+  check(
+    bcCards.length === 5 &&
+      bcUnique.size === 5 &&
+      bcCards.every((c) => c.number.startsWith("4111")),
+    `batch completion produced ${bcCards.length} cards, ${bcUnique.size} distinct, prefix kept`,
+  );
+  console.log(`  batch completion: ${bcCards.length} cards, ${bcUnique.size} distinct, typed prefix preserved`);
 
   // Determinism.
   const d1 = generateCard("Visa", 999).number;

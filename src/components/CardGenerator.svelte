@@ -20,7 +20,7 @@
   import type { SiteLang } from "../config";
   import { cardStrings } from "../i18n/card";
   import { NETWORKS, NETWORK_ORDER, type NetworkId } from "../lib/card/networks";
-  import { generateCards, completeCard, seedForInput } from "../lib/card/generate";
+  import { generateCards, completeCards, seedForInput, type Card } from "../lib/card/generate";
   import { randomSeed } from "../lib/generator/rng";
 
   export let lang: SiteLang;
@@ -32,7 +32,7 @@
   let choice: NetworkId | "random" = "random";
   let count = 5;
   let partial = "";
-  let cards: import("../lib/card/generate").Card[] = [];
+  let cards: Card[] = [];
   let error = "";
   let copied: string | null = null;
 
@@ -67,17 +67,19 @@
     }
   }
 
+  /** Runs the action for the current mode. Each press gets a fresh seed. */
   function run() {
     error = "";
     if (mode === "generate") {
       cards = generateCards(choice, count, randomSeed());
     } else {
-      const res = completeCard(partial, seedForInput(partial));
-      if (res.card) {
-        cards = [res.card];
+      const results = completeCards(partial, count, seedForInput(partial) ^ randomSeed());
+      const ok = results.flatMap((r) => (r.card ? [r.card] : []));
+      if (ok.length) {
+        cards = ok;
       } else {
         cards = [];
-        error = errorText(res.error);
+        error = errorText(results[0]?.error ?? "empty");
       }
     }
   }
@@ -94,7 +96,7 @@
   }
 
   /** The pipe-delimited line, matching the common bulk format. */
-  function line(c: { formatted: string; expiry: string; cvv: string; holder: string }): string {
+  function line(c: Card): string {
     return `${c.formatted} | ${c.expiry} | ${c.cvv} | ${c.holder}`;
   }
 
@@ -108,7 +110,19 @@
     return `color: ${NETWORKS[network].theme.inkMuted};`;
   }
 
-  // Show one sample card immediately so the page is never empty on arrival.
+  /*
+   * Longer numbers need a smaller face. A 19-digit Visa printed at the 16-digit
+   * size runs off the plastic, so the class scales the font by length. The
+   * breakpoints are the digit counts that actually occur (15, 16, 19).
+   */
+  function numClass(c: Card): string {
+    const n = c.number.length;
+    if (n >= 19) return "n19";
+    if (n >= 17) return "n17";
+    return "n16";
+  }
+
+  // Show a sample batch immediately so the page is never empty on arrival.
   onMount(() => {
     cards = generateCards("random", count, randomSeed());
   });
@@ -180,7 +194,19 @@
             on:keydown={(e) => { if (e.key === "Enter") run(); }}
           />
         </div>
-        <button class="btn btn-primary" type="button" on:click={run}>{m.complete}</button>
+
+        <div class="field field-count">
+          <label class="field-label" for="card-count-c">{m.countLabel}</label>
+          <select id="card-count-c" class="select" bind:value={count}>
+            {#each COUNTS as c (c)}
+              <option value={c}>{c}</option>
+            {/each}
+          </select>
+        </div>
+
+        <button class="btn btn-primary" type="button" on:click={run}>
+          {cards.length ? m.regenerate : m.complete}
+        </button>
       </div>
       <p class="hint faint note">{m.partialHint}</p>
     {/if}
@@ -213,29 +239,97 @@
                 <span class="brand">{NETWORKS[c.network].label}</span>
               </div>
 
-              <div class="cc-num">{c.formatted}</div>
+              <!-- Number, with its own copy control. The length class keeps a
+                   19-digit number inside the plastic. -->
+              <div class="cc-numrow">
+                <span class="cc-num {numClass(c)}">{c.formatted}</span>
+                <button
+                  class="cc-copy"
+                  type="button"
+                  title={m.copyNumber}
+                  aria-label="{m.copyNumber}: {c.formatted}"
+                  on:click={() => copy(c.number, "num:" + c.number)}
+                >
+                  {#if copied === "num:" + c.number}
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                  {:else}
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="9" y="9" width="12" height="12" rx="2.5" />
+                      <path d="M5 15V5.5A2.5 2.5 0 0 1 7.5 3H17" />
+                    </svg>
+                  {/if}
+                </button>
+              </div>
 
               <div class="cc-meta">
-                <div>
+                <!-- Each of holder / expiry / CVV copies on its own. -->
+                <div class="cc-cell">
                   <div class="cc-k" style={mutedStyle(c.network)}>{m.holder}</div>
                   <div class="cc-v">{c.holder}</div>
+                  <button
+                    class="cc-copy"
+                    type="button"
+                    title={m.copyHolder}
+                    aria-label="{m.copyHolder}: {c.holder}"
+                    on:click={() => copy(c.holder, "holder:" + i)}
+                  >
+                    {#if copied === "holder:" + i}
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5" /></svg>
+                    {:else}
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5" /><path d="M5 15V5.5A2.5 2.5 0 0 1 7.5 3H17" /></svg>
+                    {/if}
+                  </button>
                 </div>
-                <div>
+
+                <div class="cc-cell">
                   <div class="cc-k" style={mutedStyle(c.network)}>{m.expiry}</div>
                   <div class="cc-v">{c.expiry}</div>
+                  <button
+                    class="cc-copy"
+                    type="button"
+                    title={m.copyExpiry}
+                    aria-label="{m.copyExpiry}: {c.expiry}"
+                    on:click={() => copy(c.expiry, "exp:" + i)}
+                  >
+                    {#if copied === "exp:" + i}
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5" /></svg>
+                    {:else}
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5" /><path d="M5 15V5.5A2.5 2.5 0 0 1 7.5 3H17" /></svg>
+                    {/if}
+                  </button>
                 </div>
-                <div>
+
+                <div class="cc-cell">
                   <div class="cc-k" style={mutedStyle(c.network)}>{m.cvv}</div>
                   <div class="cc-v">{c.cvv}</div>
+                  <button
+                    class="cc-copy"
+                    type="button"
+                    title={m.copyCvv}
+                    aria-label="{m.copyCvv}: {c.cvv}"
+                    on:click={() => copy(c.cvv, "cvv:" + i)}
+                  >
+                    {#if copied === "cvv:" + i}
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5" /></svg>
+                    {:else}
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5" /><path d="M5 15V5.5A2.5 2.5 0 0 1 7.5 3H17" /></svg>
+                    {/if}
+                  </button>
                 </div>
               </div>
 
               <div class="cc-bank" style={mutedStyle(c.network)}>{c.bank}</div>
             </div>
-
-            <button class="btn btn-secondary copy-line" type="button" on:click={() => copy(c.number, "num:" + c.number)}>
-              {copied === "num:" + c.number ? m.numberCopied : m.copyNumber}
-            </button>
           </div>
         {/each}
       </div>
@@ -357,9 +451,15 @@
   /*
    * The plastic card. Aspect ratio 1.586:1 is the ISO/IEC 7810 ID-1 shape, so
    * the proportions read as a real card rather than a generic rectangle.
+   *
+   * `container-type: inline-size` makes the card its own query container, which
+   * is what lets the number size itself from the card's width. Without it a
+   * 19-digit number (Visa, UnionPay) at a fixed font size ran past the plastic
+   * and was clipped — the defect this replaces.
    */
   .ccard {
     position: relative;
+    container-type: inline-size;
     aspect-ratio: 1.586 / 1;
     border-radius: var(--radius-lg);
     padding: 1.125rem 1.25rem;
@@ -409,20 +509,43 @@
     max-width: 60%;
   }
 
+  /*
+   * Number row: the digits plus their copy control.
+   *
+   * The number is sized in container-width units (`cqw`) so it always fits the
+   * plastic whatever the card's width, and the length classes trim it further
+   * for the longer numbers. At the common 325px card this is ~19px for 16
+   * digits and ~15px for 19, both comfortably inside the card.
+   */
+  .cc-numrow {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-width: 0;
+  }
+
   .cc-num {
-    font-size: 1.1875rem;
-    letter-spacing: 0.1em;
+    font-size: 5.9cqw;
+    letter-spacing: 0.08em;
     text-shadow: 0 1px 2px rgba(0,0,0,.28);
     white-space: nowrap;
-    /* Shrink on narrow cards rather than wrapping or overflowing. */
-    overflow: hidden;
+    min-width: 0;
   }
+
+  .cc-num.n17 { font-size: 5.4cqw; letter-spacing: 0.07em; }
+  .cc-num.n19 { font-size: 4.8cqw; letter-spacing: 0.06em; }
 
   .cc-meta {
     display: flex;
-    align-items: flex-end;
+    align-items: flex-start;
     justify-content: space-between;
-    gap: 0.75rem;
+    gap: 0.5rem;
+  }
+
+  /* Each meta cell is a small stack with its own copy button in the corner. */
+  .cc-cell {
+    position: relative;
+    min-width: 0;
   }
 
   .cc-k {
@@ -432,7 +555,44 @@
     letter-spacing: 0.1em;
   }
 
-  .cc-v { font-size: 0.8125rem; }
+  .cc-v { font-size: 0.8125rem; white-space: nowrap; }
+
+  /* Copy control on the card face. Light-on-dark, revealed on hover/focus and
+     always visible where hover does not exist. */
+  .cc-copy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    flex-shrink: 0;
+    background: rgba(255,255,255,.14);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: inherit;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 140ms ease, background-color 140ms ease, border-color 140ms ease;
+  }
+
+  .cc-numrow:hover .cc-copy,
+  .cc-numrow:focus-within .cc-copy,
+  .cc-cell:hover .cc-copy,
+  .cc-cell:focus-within .cc-copy {
+    opacity: 1;
+  }
+
+  .cc-copy:hover {
+    background: rgba(255,255,255,.28);
+    border-color: rgba(255,255,255,.5);
+  }
+
+  .cc-copy:focus-visible { opacity: 1; }
+
+  @media (hover: none) {
+    .cc-copy { opacity: 1; }
+  }
 
   .cc-bank {
     font-family: var(--font-sans, Inter, sans-serif);
@@ -444,10 +604,7 @@
     text-overflow: ellipsis;
   }
 
-  .copy-line { width: 100%; }
-
   /* --------------------------------------------------------- guide card */
-
   .guide { padding: 1.5rem; }
 
   .guide h2 {
