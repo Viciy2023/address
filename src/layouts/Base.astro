@@ -10,6 +10,7 @@ import { SITE, IS_PREVIEW, LANGS, LANG_LABEL, LANG_TAG, type SiteLang, localize,
 import { t } from "../i18n/strings";
 import { mailStrings } from "../i18n/mail";
 import { cardStrings } from "../i18n/card";
+import { addressStrings } from "../i18n/address";
 import Integrations from "../components/Integrations.astro";
 import ConsentBanner from "../components/ConsentBanner.astro";
 
@@ -30,6 +31,8 @@ const mailNav = mailStrings(lang).nav;
 const isMail = path === "/mail/";
 const cardNav = cardStrings(lang).nav;
 const isCard = path === "/credit-card/";
+const addressNav = addressStrings(lang).nav;
+const isAddress = path === "/address/";
 const s = t(lang);
 
 const canonical = absolute(path, lang);
@@ -131,6 +134,9 @@ const ogImage = `${SITE.url}/og.png`;
           <a class="nav-link" href={localize("/credit-card/", lang)} aria-current={isCard ? "page" : undefined}>
             {cardNav}
           </a>
+          <a class="nav-link" href={localize("/address/", lang)} aria-current={isAddress ? "page" : undefined}>
+            {addressNav}
+          </a>
           <a class="nav-link" href={localize("/countries/", lang)}>{s.navCountries}</a>
           <a class="nav-link" href={localize("/credits/", lang)}>{s.navCredits}</a>
         </nav>
@@ -190,6 +196,7 @@ const ogImage = `${SITE.url}/og.png`;
             <a href={localize("/", lang)}>{s.navGenerate}</a>
             <a href={localize("/mail/", lang)}>{mailNav}</a>
             <a href={localize("/credit-card/", lang)}>{cardNav}</a>
+            <a href={localize("/address/", lang)}>{addressNav}</a>
             <a href={localize("/countries/", lang)}>{s.linkCountries}</a>
             <a href={localize("/credits/", lang)}>{s.linkCredits}</a>
             <a href={localize("/about/", lang)}>{s.linkAbout}</a>

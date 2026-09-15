@@ -1,0 +1,54 @@
+---
+/**
+ * Virtual address generator page.
+ *
+ * Same shell as the mailbox and card pages: a short hero, then the tool. The
+ * component owns the result card and the explainer sections below it.
+ */
+import AddressGenerator from "../components/AddressGenerator.svelte";
+import type { SiteLang } from "../config";
+import { addressStrings } from "../i18n/address";
+
+interface Props {
+  lang: SiteLang;
+}
+const { lang } = Astro.props as Props;
+const m = addressStrings(lang);
+---
+
+<section class="hero">
+  <div class="shell">
+    <h1>{m.title}</h1>
+    <p class="hero-sub">{m.intro}</p>
+  </div>
+</section>
+
+<section class="shell workspace" aria-label={m.title}>
+  <AddressGenerator client:load {lang} />
+</section>
+
+<style>
+  .hero {
+    padding-block: 3rem 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .hero h1 {
+    font-size: clamp(2rem, 6vw, 3rem);
+    letter-spacing: -0.035em;
+    margin: 0 0 1rem;
+    max-width: 22ch;
+  }
+
+  .hero-sub {
+    font-size: 1.0625rem;
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0;
+    line-height: 1.7;
+  }
+
+  .workspace {
+    padding-block: 2.5rem;
+  }
+</style>

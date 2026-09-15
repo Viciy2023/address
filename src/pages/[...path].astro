@@ -22,6 +22,7 @@ import CountryView from "../views/CountryView.astro";
 import CreditsView from "../views/CreditsView.astro";
 import MailView from "../views/MailView.astro";
 import CardView from "../views/CardView.astro";
+import AddressView from "../views/AddressView.astro";
 import { ROUTES, countryPath, type RouteDef } from "../routes";
 import { LANGS, SITE, type SiteLang, absolute } from "../config";
 import { t } from "../i18n/strings";
@@ -29,6 +30,7 @@ import { ABOUT, CONTACT, TERMS, type PageCopy } from "../content";
 import { COUNTRY_PAGE } from "../country-content";
 import { mailStrings } from "../i18n/mail";
 import { cardStrings } from "../i18n/card";
+import { addressStrings } from "../i18n/address";
 import { buildPrivacy } from "../privacy";
 import { availableCountries, totalCityCount, totalDivisionCount } from "../lib/data";
 import { COUNTRIES, COUNTRY_BY_CODE } from "../lib/registry";
@@ -79,6 +81,7 @@ const { lang, route, country } = Astro.props as unknown as PathProps;
 const s = t(lang);
 const mc = mailStrings(lang);
 const cd = cardStrings(lang);
+const ad = addressStrings(lang);
 const isHome = route.path === "";
 const isCountry = Boolean(country);
 
@@ -129,22 +132,25 @@ const countryDescription = cSpec
   ? cc.intro.replace(/\{name\}/g, cName).replace(/\{id\}/g, (cSpec.id.name[lang] ?? cSpec.id.name.en)).slice(0, 300)
   : "";
 
-/* The mailbox and card pages have their own copy modules. */
+/* The mailbox, card and address pages have their own copy modules. */
 const isMail = route.path === "mail";
 const isCard = route.path === "credit-card";
+const isAddress = route.path === "address";
 const title = isHome
   ? homeTitle
   : isMail
     ? `${mc.title} | ${s.brand}`
     : isCard
       ? `${cd.title} | ${s.brand}`
-      : isCountry
-        ? countryTitle
-        : copy
-          ? `${copy.title} | ${s.brand}`
-          : route.path === "countries"
-            ? `${s.countriesTitle} | ${s.brand}`
-            : `${s.creditsTitle} | ${s.brand}`;
+      : isAddress
+        ? `${ad.title} | ${s.brand}`
+        : isCountry
+          ? countryTitle
+          : copy
+            ? `${copy.title} | ${s.brand}`
+            : route.path === "countries"
+              ? `${s.countriesTitle} | ${s.brand}`
+              : `${s.creditsTitle} | ${s.brand}`;
 
 const description = isHome
   ? homeDescription
@@ -152,9 +158,11 @@ const description = isHome
     ? mc.intro
     : isCard
       ? cd.intro
-      : isCountry
-        ? countryDescription
-        : (copy?.intro ?? (route.path === "countries" ? s.countriesSub : s.disclaimerBody));
+      : isAddress
+        ? ad.intro
+        : isCountry
+          ? countryDescription
+          : (copy?.intro ?? (route.path === "countries" ? s.countriesSub : s.disclaimerBody));
 
 /* -------------------------------------------------------- structured data */
 
@@ -262,6 +270,8 @@ const breadcrumb = {
     <MailView {lang} />
   ) : isCard ? (
     <CardView {lang} />
+  ) : isAddress ? (
+    <AddressView {lang} />
   ) : route.path === "countries" ? (
     <CountriesView {lang} />
   ) : (

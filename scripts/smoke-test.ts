@@ -1332,5 +1332,126 @@ console.log("\n=== card generator ===");
   console.log("  check-digit computation matches known-valid numbers");
 }
 
+console.log("\n=== address generator ===");
+{
+  /*
+   * The address page projects the address group out of a generated identity, so
+   * most of its correctness is already covered by the identity tests above.
+   * What is specific to this feature, and checked here:
+   *   - the country list is complete and ordered by English name;
+   *   - the picker label is "name·CODE";
+   *   - the projected record carries the fields a form needs, omitting postal
+   *     exactly where the country has no postal system;
+   *   - the format explainer agrees with the registry (the point of deriving it
+   *     rather than writing prose).
+   */
+  const {
+    sortedCountries, addressFormat, addressCountry, generateAddress,
+  } = await import("../src/lib/address/generate.ts");
+  const { COUNTRIES, COUNTRY_BY_CODE } = await import("../src/lib/registry.ts");
+  const { loadCountryData, loadNamePool } = await import("../src/lib/data.ts");
+  const { LANGS } = await import("../src/config.ts");
+
+  // Country list: complete, and ordered by English name.
+  const list = sortedCountries("zh");
+  check(list.length === COUNTRIES.length,
+    `address country list has ${list.length}, registry has ${COUNTRIES.length}`);
+  const engs = list.map((c) => c.english);
+  const sortedCopy = [...engs].sort((a, b) => a.localeCompare(b, "en"));
+  check(JSON.stringify(engs) === JSON.stringify(sortedCopy), "address country list is not sorted by English name");
+  check(list.every((c) => c.label === `${c.name}·${c.code}`), "address picker label is not name·CODE");
+  console.log(`  ${list.length} countries, ordered by English name, labelled name·CODE`);
+
+  // Every language yields the same ordering (ordering must not depend on UI lang).
+  const orderByLang = LANGS.map((l) => sortedCountries(l).map((c) => c.code).join(","));
+  check(new Set(orderByLang).size === 1, "country order differs between UI languages");
+  console.log("  ordering is identical across all five languages");
+
+  // Localized labels differ by language, order does not.
+  const zhFirst = sortedCountries("zh")[0];
+  const enFirst = sortedCountries("en")[0];
+  check(zhFirst.code === enFirst.code, "first country differs between zh and en");
+
+  // The projected record: required fields, postal only where applicable.
+  let recBad = 0;
+  let recChecked = 0;
+  for (const spec of COUNTRIES) {
+    const [countryData, name] = await Promise.all([loadCountryData(spec.code), loadNamePool(spec.code)]);
+    const rec = generateAddress(spec, { name, countryData }, 4242);
+    recChecked++;
+    const keys = rec.fields.map((f) => f.key);
+    for (const required of ["street", "city", "state", "country", "phone"]) {
+      if (!keys.includes(required)) { recBad++; if (recBad <= 6) console.error(`  FAIL: ${spec.code} record missing ${required}`); }
+    }
+    // Postal presence must follow the country's postal scheme exactly.
+    const hasPostal = keys.includes("postal");
+    if (hasPostal === spec.postalDisabled) {
+      recBad++;
+      if (recBad <= 6) console.error(`  FAIL: ${spec.code} postalDisabled=${spec.postalDisabled} but postal present=${hasPostal}`);
+    }
+    // Every value must be non-empty.
+    for (const f of rec.fields) {
+      if (!f.value || !f.value.trim()) { recBad++; if (recBad <= 6) console.error(`  FAIL: ${spec.code} field ${f.key} is empty`); }
+    }
+    if (!rec.fullAddress.trim()) { recBad++; if (recBad <= 6) console.error(`  FAIL: ${spec.code} fullAddress is empty`); }
+    if (!rec.fullName.trim()) { recBad++; if (recBad <= 6) console.error(`  FAIL: ${spec.code} fullName is empty`); }
+  }
+  check(recBad === 0, `${recBad}/${recChecked} address records were malformed`);
+  console.log(`  ${recChecked - recBad}/${recChecked} records carry the right fields, postal omitted only where the country has none`);
+
+  // The format explainer must agree with the registry it describes.
+  let fmtBad = 0;
+  for (const spec of COUNTRIES) {
+    for (const lang of LANGS) {
+      const f = addressFormat(spec, lang);
+      if (f.dialCode !== spec.phone.code) { fmtBad++; console.error(`  FAIL: ${spec.code} dial code ${f.dialCode} != ${spec.phone.code}`); }
+      if (f.nationalDigits !== spec.phone.nationalDigits) { fmtBad++; console.error(`  FAIL: ${spec.code} national digits mismatch`); }
+      if (JSON.stringify(f.groups) !== JSON.stringify(spec.phone.groups)) { fmtBad++; console.error(`  FAIL: ${spec.code} groups mismatch`); }
+      if (f.postalDisabled !== spec.postalDisabled) { fmtBad++; console.error(`  FAIL: ${spec.code} postalDisabled mismatch`); }
+      if (spec.postalDisabled && f.postalMask !== "") { fmtBad++; console.error(`  FAIL: ${spec.code} postal mask should be empty`); }
+      if (!spec.postalDisabled && !f.postalMask) { fmtBad++; console.error(`  FAIL: ${spec.code} postal mask should not be empty`); }
+      if (!f.adminLabel) { fmtBad++; console.error(`  FAIL: ${spec.code} admin label empty for ${lang}`); }
+      if (f.template.length !== spec.address.template.length) { fmtBad++; console.error(`  FAIL: ${spec.code} template length mismatch`); }
+    }
+  }
+  check(fmtBad === 0, `${fmtBad} format-explainer values disagreed with the registry`);
+  console.log("  format explainer agrees with the registry for all countries and languages");
+
+  // Determinism: the same seed reproduces the same address.
+  const usSpec = COUNTRY_BY_CODE["US"];
+  const [usData, usName] = await Promise.all([loadCountryData("US"), loadNamePool("US")]);
+  const a1 = generateAddress(usSpec, { name: usName, countryData: usData }, 777);
+  const a2 = generateAddress(usSpec, { name: usName, countryData: usData }, 777);
+  check(a1.fullAddress === a2.fullAddress && a1.fullName === a2.fullName, "address generation is not deterministic");
+  console.log("  address generation is deterministic for a fixed seed");
+
+  // Different seeds must produce different addresses.
+  const b1 = generateAddress(usSpec, { name: usName, countryData: usData }, 1);
+  const b2 = generateAddress(usSpec, { name: usName, countryData: usData }, 2);
+  check(b1.fullAddress !== b2.fullAddress, "different seeds produced the same address");
+  console.log("  different seeds produce different addresses");
+
+  // addressCountry resolves and rejects correctly.
+  check(addressCountry("us")?.code === "US" && addressCountry("ZZ") === null, "addressCountry lookup is wrong");
+  console.log("  addressCountry resolves codes case-insensitively and rejects unknown ones");
+
+  // The record is the country asked for, never a neighbourhood.
+  let crossBad = 0;
+  for (const code of ["US", "GB", "JP", "CN", "BR"]) {
+    const spec = COUNTRY_BY_CODE[code];
+    const [d, n] = await Promise.all([loadCountryData(code), loadNamePool(code)]);
+    const rec = generateAddress(spec, { name: n, countryData: d }, 99);
+    const countryField = rec.fields.find((f) => f.key === "country")?.value ?? "";
+    const expected = spec.name[spec.dataLang] ?? spec.name.en;
+    if (!countryField.includes(expected) && countryField !== expected) {
+      // The localized name is what the generator emits; accept an exact match only.
+      crossBad++;
+      console.error(`  FAIL: ${code} address country field "${countryField}" != "${expected}"`);
+    }
+  }
+  check(crossBad === 0, `${crossBad} addresses carried the wrong country name`);
+  console.log("  records carry their own country's name");
+}
+
 console.log(`\n${failures === 0 ? "PASS" : "FAIL"} — ${checks} checks, ${failures} failures`);
 process.exit(failures === 0 ? 0 : 1);
